@@ -1,0 +1,12 @@
+{
+  "name": "gamemind-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GameMind AI — a mobile-first AI chat website with gaming tools, powered by the Groq API.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "vercel dev"
+  }
+}
