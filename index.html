@@ -1,0 +1,1826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>GameMind AI</title>
+<meta name="description" content="GameMind AI — a chat assistant and toolkit for gamers." />
+<meta name="theme-color" content="#0A0B10" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   GameMind AI — styles
+   Tokens: dark navy base, restrained purple-blue accent
+   ============================================================ */
+
+:root {
+  --bg: #0a0b10;
+  --bg-raised: #12141c;
+  --bg-elevated: #191c26;
+  --bg-input: #14161f;
+  --border: #23273580;
+  --border-strong: #2c3142;
+
+  --text: #e9eaf2;
+  --text-muted: #9296ab;
+  --text-faint: #666b80;
+
+  --accent: #7b6bff;
+  --accent-2: #4f8cff;
+  --accent-soft: #7b6bff1f;
+  --accent-soft-strong: #7b6bff33;
+
+  --danger: #ff6b6b;
+  --danger-soft: #ff6b6b1a;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+
+  --font-display: "Space Grotesk", "Inter", sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  color-scheme: dark;
+}
+
+[data-theme="darker"] {
+  --bg: #05060a;
+  --bg-raised: #0c0e15;
+  --bg-elevated: #12141c;
+  --bg-input: #0e0f17;
+  --border: #1c1f2c80;
+  --border-strong: #242838;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+textarea, input {
+  font-family: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ============================================================
+   App shell
+   ============================================================ */
+
+.app {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+  margin: 0 auto;
+  position: relative;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+  z-index: 5;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-mark {
+  display: inline-flex;
+  color: var(--accent);
+}
+
+.brand-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: 0.01em;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  color: var(--text-muted);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.icon-btn:hover { color: var(--text); border-color: var(--border-strong); }
+
+.screens {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.screen[hidden] {
+  display: none;
+}
+
+.screen-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 16px 28px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.screen-title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  margin: 4px 0 4px;
+}
+
+.screen-sub {
+  color: var(--text-muted);
+  font-size: 13.5px;
+  margin: 0 0 20px;
+}
+
+/* ============================================================
+   Bottom nav
+   ============================================================ */
+
+.bottom-nav {
+  display: flex;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 5;
+}
+
+.nav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 9px 4px 8px;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 11px;
+  transition: color 0.15s ease;
+}
+
+.nav-btn svg { transition: transform 0.15s ease; }
+.nav-btn.is-active { color: var(--accent); }
+.nav-btn:active svg { transform: scale(0.92); }
+
+/* ============================================================
+   Chat screen
+   ============================================================ */
+
+.chat-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 14px 12px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 10vh 12px 8px;
+  animation: rise 0.4s ease both;
+}
+
+.empty-state[hidden] {
+  display: none;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.empty-mark {
+  display: inline-flex;
+  color: var(--accent);
+  margin-bottom: 14px;
+}
+
+.empty-title {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+.empty-sub {
+  color: var(--text-muted);
+  font-size: 13.5px;
+  margin: 0 0 22px;
+}
+
+.prompt-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.chip:hover { border-color: var(--accent-soft-strong); background: var(--bg-elevated); }
+
+.chip-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.bubble-row {
+  display: flex;
+}
+.bubble-row.user { justify-content: flex-end; }
+.bubble-row.ai { justify-content: flex-start; }
+
+.bubble {
+  max-width: 84%;
+  padding: 11px 14px;
+  border-radius: var(--radius-lg);
+  font-size: 14.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  animation: pop 0.18s ease both;
+}
+
+@keyframes pop {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.bubble-user {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.bubble-ai {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+
+.typing-row { max-width: 640px; margin: 10px auto 0; }
+.bubble.typing {
+  display: inline-flex;
+  gap: 4px;
+  padding: 13px 16px;
+}
+.typing .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  animation: blink 1.1s infinite ease-in-out;
+}
+.typing .dot:nth-child(2) { animation-delay: 0.15s; }
+.typing .dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes blink {
+  0%, 80%, 100% { opacity: 0.25; }
+  40% { opacity: 1; }
+}
+
+.error-row { max-width: 640px; margin: 10px auto 0; }
+.error-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--danger-soft);
+  border: 1px solid #ff6b6b40;
+  color: #ffb3b3;
+  padding: 11px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  text-decoration: underline;
+  font-size: 13.5px;
+  flex-shrink: 0;
+}
+
+/* Composer */
+
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+
+.composer-input {
+  flex: 1;
+  resize: none;
+  max-height: 140px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius-md);
+  padding: 11px 14px;
+  font-size: 14.5px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.composer-input:focus { border-color: var(--accent-soft-strong); }
+.composer-input::placeholder { color: var(--text-faint); }
+
+.send-btn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s ease, opacity 0.15s ease;
+}
+.send-btn:active { transform: scale(0.94); }
+.send-btn:disabled { opacity: 0.45; cursor: default; }
+
+/* ============================================================
+   Tools list
+   ============================================================ */
+
+.tool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tool-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 13px 14px;
+  color: var(--text);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.tool-item:hover { border-color: var(--accent-soft-strong); background: var(--bg-elevated); }
+
+.tool-icon {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tool-item-text { flex: 1; min-width: 0; }
+.tool-item-title { font-size: 14.5px; font-weight: 600; }
+.tool-item-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 1px; }
+
+.tool-item-chevron { color: var(--text-faint); flex-shrink: 0; }
+
+/* ============================================================
+   Tool detail / forms
+   ============================================================ */
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  padding: 0;
+  margin-bottom: 14px;
+}
+.back-btn:hover { color: var(--text); }
+
+.tool-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tool-heading .screen-title { margin: 4px 0 4px; }
+
+.tool-heading-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tool-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+
+.field-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.field select,
+.field input[type="text"],
+.field textarea {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 11px 12px;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.15s ease;
+}
+.field select:focus,
+.field input[type="text"]:focus,
+.field textarea:focus { border-color: var(--accent-soft-strong); }
+
+.field textarea { resize: vertical; min-height: 72px; }
+
+.field select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%239296ab' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 34px;
+}
+
+.primary-btn {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 13px 18px;
+  font-size: 14.5px;
+  font-weight: 600;
+  transition: transform 0.1s ease, opacity 0.15s ease;
+}
+.primary-btn:active { transform: scale(0.98); }
+.primary-btn:disabled { opacity: 0.5; cursor: default; }
+
+.ghost-btn {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 9px 13px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: border-color 0.15s ease;
+}
+.ghost-btn:hover { border-color: var(--accent-soft-strong); }
+
+.tool-result {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  animation: pop 0.2s ease both;
+}
+
+.tool-result-header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.tool-result-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tool-result-icon svg { width: 13px; height: 13px; }
+
+.tool-result-body {
+  padding: 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.tool-result-actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 14px;
+  flex-wrap: wrap;
+}
+
+.tool-error {
+  margin-top: 14px;
+  background: var(--danger-soft);
+  border: 1px solid #ff6b6b40;
+  color: #ffb3b3;
+  padding: 11px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+}
+
+/* ============================================================
+   History
+   ============================================================ */
+
+.history-list { display: flex; flex-direction: column; gap: 8px; }
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 12px;
+}
+
+.history-item-main {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  color: var(--text);
+  padding: 0;
+}
+
+.history-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-item-sub {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.history-delete {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-faint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.history-delete:hover { color: var(--danger); border-color: #ff6b6b40; }
+
+.empty-hint {
+  color: var(--text-faint);
+  font-size: 13.5px;
+  text-align: center;
+  padding: 30px 0;
+}
+
+/* ============================================================
+   Settings
+   ============================================================ */
+
+.settings-group {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text);
+}
+
+.settings-row-btn:hover { background: var(--bg-elevated); }
+.settings-row-static { cursor: default; }
+
+.settings-row-title { font-size: 14px; font-weight: 600; text-align: left; }
+.settings-row-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; text-align: left; }
+
+.toggle {
+  flex-shrink: 0;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  position: relative;
+  transition: background 0.2s ease;
+}
+.toggle[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+.toggle-knob {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s ease;
+}
+.toggle[aria-checked="true"] .toggle-knob { transform: translateX(18px); }
+
+/* ============================================================
+   Desktop layout
+   ============================================================ */
+
+@media (min-width: 860px) {
+  .app {
+    max-width: 900px;
+    height: 100dvh;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+
+  .bottom-nav {
+    position: static;
+    order: -1;
+    flex-direction: column;
+    width: 100%;
+  }
+}
+
+@media (min-width: 860px) {
+  .app { flex-direction: row; flex-wrap: wrap; }
+  .topbar { width: 100%; order: 0; }
+  .bottom-nav {
+    flex-direction: row;
+    width: 100%;
+    order: 3;
+  }
+  .screens { width: 100%; order: 2; }
+}
+
+/* Scrollbar (desktop) */
+.chat-scroll::-webkit-scrollbar,
+.screen-scroll::-webkit-scrollbar { width: 8px; }
+.chat-scroll::-webkit-scrollbar-thumb,
+.screen-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 8px;
+}
+
+/* Focus visibility */
+button:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <!-- ===================== SIDEBAR (desktop) / TOP BAR (mobile) ===================== -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <path d="M7 8.5h10a4.5 4.5 0 014.4 5.5l-.5 2.2a2.6 2.6 0 01-4.6 1l-1-1.4a2 2 0 00-1.6-.8h-4.4a2 2 0 00-1.6.8l-1 1.4a2.6 2.6 0 01-4.6-1l-.5-2.2A4.5 4.5 0 017 8.5z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+          <path d="M9 11v3M7.5 12.5h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          <circle cx="16" cy="11.2" r="0.9" fill="currentColor"/>
+          <circle cx="18" cy="13.2" r="0.9" fill="currentColor"/>
+        </svg>
+      </span>
+      <span class="brand-name">GameMind AI</span>
+    </div>
+    <button class="icon-btn" id="newChatBtn" title="New chat" aria-label="New chat">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+  </header>
+
+  <!-- ===================== SCREENS ===================== -->
+  <main class="screens">
+
+    <!-- ---------- CHAT SCREEN ---------- -->
+    <section class="screen" id="screen-chat" data-screen="chat">
+      <div class="chat-scroll" id="chatScroll">
+
+        <div class="empty-state" id="emptyState">
+          <span class="empty-mark" aria-hidden="true">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+              <path d="M7 8.5h10a4.5 4.5 0 014.4 5.5l-.5 2.2a2.6 2.6 0 01-4.6 1l-1-1.4a2 2 0 00-1.6-.8h-4.4a2 2 0 00-1.6.8l-1 1.4a2.6 2.6 0 01-4.6-1l-.5-2.2A4.5 4.5 0 017 8.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M9 11v3M7.5 12.5h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              <circle cx="16" cy="11.2" r="0.9" fill="currentColor"/>
+              <circle cx="18" cy="13.2" r="0.9" fill="currentColor"/>
+            </svg>
+          </span>
+          <h1 class="empty-title">What are we playing today?</h1>
+          <p class="empty-sub">Ask about a game, get a strategy, or pick a tool below.</p>
+
+          <div class="prompt-chips" id="promptChips">
+            <button class="chip" data-prompt="Suggest an efficient Minecraft base layout for survival.">
+              <span class="chip-icon" style="background:#22c55e26;color:#22c55e">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M4.5 7.5L12 12l7.5-4.5M12 12v9" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+              </span>
+              Help me in Minecraft
+            </button>
+            <button class="chip" data-prompt="Write me a short, exciting gaming story.">
+              <span class="chip-icon" style="background:#8b5cf626;color:#8b5cf6">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H12v16H5.5A1.5 1.5 0 014 18.5v-13z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M20 5.5c0-.8-.7-1.5-1.5-1.5H12v16h6.5a1.5 1.5 0 001.5-1.5v-13z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+              </span>
+              Give me a gaming story
+            </button>
+            <button class="chip" data-prompt="I need help with a game. What can you help me with?">
+              <span class="chip-icon" style="background:#38bdf826;color:#38bdf8">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M7 8.5h10a4.5 4.5 0 014.4 5.5l-.5 2.2a2.6 2.6 0 01-4.6 1l-1-1.4a2 2 0 00-1.6-.8h-4.4a2 2 0 00-1.6.8l-1 1.4a2.6 2.6 0 01-4.6-1l-.5-2.2A4.5 4.5 0 017 8.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+              </span>
+              Help me with a game
+            </button>
+            <button class="chip" data-prompt="Create a fun gaming challenge for me to try today.">
+              <span class="chip-icon" style="background:#f59e0b26;color:#f59e0b">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M8 4h8v3a4 4 0 01-8 0V4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 5H5.5A1.5 1.5 0 004 6.5c0 2 1.5 3.5 3.5 3.7M16 5h2.5A1.5 1.5 0 0120 6.5c0 2-1.5 3.5-3.5 3.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 11v4m-3 3h6m-3-3v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </span>
+              Create a gaming challenge
+            </button>
+          </div>
+        </div>
+
+        <div class="messages" id="messages"></div>
+
+        <div class="typing-row" id="typingRow" hidden>
+          <div class="bubble bubble-ai typing">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          </div>
+        </div>
+
+        <div class="error-row" id="errorRow" hidden>
+          <div class="error-card">
+            <span id="errorText">Something went wrong.</span>
+            <button class="link-btn" id="retryBtn">Retry</button>
+          </div>
+        </div>
+
+      </div>
+
+      <form class="composer" id="composerForm">
+        <textarea
+          id="composerInput"
+          class="composer-input"
+          placeholder="Message GameMind AI…"
+          rows="1"
+          maxlength="4000"
+        ></textarea>
+        <button type="submit" class="send-btn" id="sendBtn" aria-label="Send message">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 12l16-7-6.5 16-2.5-6.5L4 12z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>
+        </button>
+      </form>
+    </section>
+
+    <!-- ---------- TOOLS SCREEN ---------- -->
+    <section class="screen" id="screen-tools" data-screen="tools" hidden>
+      <div class="screen-scroll">
+        <h1 class="screen-title">Gaming tools</h1>
+        <p class="screen-sub">Pick a tool to generate something useful for your game.</p>
+
+        <div class="tool-list" id="toolList"></div>
+      </div>
+    </section>
+
+    <!-- ---------- TOOL DETAIL SCREEN ---------- -->
+    <section class="screen" id="screen-tool-detail" data-screen="tool-detail" hidden>
+      <div class="screen-scroll">
+        <button class="back-btn" id="toolBackBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Tools
+        </button>
+
+        <div class="tool-heading">
+          <span class="tool-heading-icon" id="toolHeadingIcon"></span>
+          <h1 class="screen-title" id="toolTitle">Tool</h1>
+        </div>
+        <p class="screen-sub" id="toolDesc"></p>
+
+        <form class="tool-form" id="toolForm"></form>
+
+        <div class="tool-result" id="toolResult" hidden>
+          <div class="tool-result-header">
+            <span class="tool-result-icon" id="toolResultIcon"></span>
+            <span id="toolResultTitle">Result</span>
+          </div>
+          <div class="tool-result-body" id="toolResultBody"></div>
+          <div class="tool-result-actions">
+            <button type="button" class="ghost-btn" id="toolCopyBtn">Copy</button>
+            <button type="button" class="ghost-btn" id="toolRegenBtn">Regenerate</button>
+            <button type="button" class="ghost-btn" id="toolNewBtn">New request</button>
+          </div>
+        </div>
+
+        <div class="tool-error" id="toolError" hidden></div>
+      </div>
+    </section>
+
+    <!-- ---------- HISTORY SCREEN ---------- -->
+    <section class="screen" id="screen-history" data-screen="history" hidden>
+      <div class="screen-scroll">
+        <h1 class="screen-title">History</h1>
+        <p class="screen-sub">Chats are stored only in this browser.</p>
+        <div class="history-list" id="historyList"></div>
+        <div class="empty-hint" id="historyEmptyHint" hidden>No saved chats yet.</div>
+      </div>
+    </section>
+
+    <!-- ---------- SETTINGS SCREEN ---------- -->
+    <section class="screen" id="screen-settings" data-screen="settings" hidden>
+      <div class="screen-scroll">
+        <h1 class="screen-title">Settings</h1>
+
+        <div class="settings-group">
+          <div class="settings-row">
+            <div>
+              <div class="settings-row-title">Theme</div>
+              <div class="settings-row-sub">Switch between dark and darker.</div>
+            </div>
+            <button class="toggle" id="themeToggle" role="switch" aria-checked="false">
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <button class="settings-row settings-row-btn" id="clearHistoryBtn">
+            <div>
+              <div class="settings-row-title">Clear chat history</div>
+              <div class="settings-row-sub">Removes all saved chats from this device.</div>
+            </div>
+          </button>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-row settings-row-static">
+            <div>
+              <div class="settings-row-title">About GameMind AI</div>
+              <div class="settings-row-sub">GameMind AI is a chat assistant and toolkit built for gamers — ask questions, get strategies, and generate content for the games you play. Your chats stay on this device.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===================== BOTTOM NAV ===================== -->
+  <nav class="bottom-nav" id="bottomNav">
+    <button class="nav-btn is-active" data-nav="chat">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H8l-4 4V5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <span>Chat</span>
+    </button>
+    <button class="nav-btn" data-nav="tools">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span>Tools</span>
+    </button>
+    <button class="nav-btn" data-nav="history">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span>History</span>
+    </button>
+    <button class="nav-btn" data-nav="settings">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 13.5a1.7 1.7 0 000-3l-1-.5a7 7 0 00-.6-1.4l.4-1.1a1.7 1.7 0 00-2.1-2.1l-1.1.4a7 7 0 00-1.4-.6l-.5-1a1.7 1.7 0 00-3 0l-.5 1a7 7 0 00-1.4.6l-1.1-.4a1.7 1.7 0 00-2.1 2.1l.4 1.1a7 7 0 00-.6 1.4l-1 .5a1.7 1.7 0 000 3l1 .5a7 7 0 00.6 1.4l-.4 1.1a1.7 1.7 0 002.1 2.1l1.1-.4a7 7 0 001.4.6l.5 1a1.7 1.7 0 003 0l.5-1a7 7 0 001.4-.6l1.1.4a1.7 1.7 0 002.1-2.1l-.4-1.1a7 7 0 00.6-1.4l1-.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      <span>Settings</span>
+    </button>
+  </nav>
+
+</div>
+
+<script>
+/* ============================================================
+   GameMind AI — inline app script
+   Vanilla JS. No frameworks. No external state libraries.
+   ============================================================ */
+
+(() => {
+  "use strict";
+
+  /* ---------------------------------------------------------
+     Constants & storage keys
+     --------------------------------------------------------- */
+
+  const STORAGE_KEYS = {
+    history: "gamemind_history_v1",
+    settings: "gamemind_settings_v1",
+  };
+
+  const REQUEST_TIMEOUT_MS = 30000;
+  const MAX_HISTORY_ITEMS = 50;
+
+  const GAMES = ["Minecraft", "Free Fire", "BGMI", "Roblox", "GTA V", "Other"];
+
+  /* ---------------------------------------------------------
+     Tool definitions
+     Each tool declares its own form fields and how to turn
+     the form values into a prompt sent to the API.
+     --------------------------------------------------------- */
+
+  const TOOLS = [
+    {
+      id: "minecraft-helper",
+      title: "Minecraft Helper",
+      desc: "Ask about building, redstone, survival, farming, and more.",
+      icon: iconCube,
+      color: "#22c55e",
+      fields: [
+        {
+          key: "topic",
+          label: "Topic",
+          type: "select",
+          options: ["Building", "Redstone", "Survival tips", "Enchanting & potions", "Farming", "Other"],
+        },
+        {
+          key: "question",
+          label: "What do you need help with?",
+          type: "textarea",
+          placeholder: "e.g. A compact automatic wheat farm for a survival world",
+          required: true,
+        },
+      ],
+      systemPrompt:
+        "You are GameMind AI's Minecraft specialist. Give clear, accurate, practical Minecraft help. Use short paragraphs or steps. Avoid fluff.",
+      buildPrompt: (v) => `Minecraft topic: ${v.topic}\nQuestion: ${v.question}`,
+    },
+    {
+      id: "story-generator",
+      title: "Gaming Story Generator",
+      desc: "Generate a short story or lore snippet set in your game.",
+      icon: iconBook,
+      color: "#8b5cf6",
+      fields: [
+        { key: "game", label: "Game", type: "select", options: GAMES },
+        {
+          key: "tone",
+          label: "Tone",
+          type: "select",
+          options: ["Epic", "Funny", "Dark", "Casual"],
+        },
+        {
+          key: "idea",
+          label: "Story idea or theme",
+          type: "textarea",
+          placeholder: "e.g. A lone survivor's last stand during a zombie raid",
+          required: true,
+        },
+      ],
+      systemPrompt:
+        "You are GameMind AI's creative writer for gaming stories. Write vivid, well-structured short fiction (roughly 200-350 words) matching the requested tone and game setting. No preamble before the story.",
+      buildPrompt: (v) => `Game: ${v.game}\nTone: ${v.tone}\nStory idea: ${v.idea}`,
+    },
+    {
+      id: "quest-generator",
+      title: "Quest Generator",
+      desc: "Create a quest or mission idea for your game or campaign.",
+      icon: iconTarget,
+      color: "#f59e0b",
+      fields: [
+        { key: "game", label: "Game", type: "select", options: GAMES },
+        {
+          key: "questType",
+          label: "Quest type",
+          type: "select",
+          options: ["Main quest", "Side quest", "Daily challenge", "Puzzle"],
+        },
+        {
+          key: "setting",
+          label: "Setting or theme",
+          type: "text",
+          placeholder: "e.g. Abandoned mine, betrayal, rescue mission",
+        },
+      ],
+      systemPrompt:
+        "You are GameMind AI's quest designer. Produce a well-structured quest with: a title, a short premise, objectives (numbered), and a reward suggestion. Keep it concise and game-ready.",
+      buildPrompt: (v) =>
+        `Game: ${v.game}\nQuest type: ${v.questType}\nSetting/theme: ${v.setting || "your choice"}`,
+    },
+    {
+      id: "name-generator",
+      title: "Gamer Name Generator",
+      desc: "Get gamertag ideas that match a style or keyword.",
+      icon: iconPerson,
+      color: "#38bdf8",
+      fields: [
+        {
+          key: "style",
+          label: "Style",
+          type: "select",
+          options: ["Cool", "Funny", "Tryhard", "Clean & simple"],
+        },
+        {
+          key: "keywords",
+          label: "Keywords (optional)",
+          type: "text",
+          placeholder: "e.g. wolf, shadow, your real name",
+        },
+      ],
+      systemPrompt:
+        "You are GameMind AI's gamertag generator. Return exactly 10 gamertag ideas as a plain numbered list, nothing else. Keep each name short and usable as a real username (no spaces unless the style calls for it).",
+      buildPrompt: (v) => `Style: ${v.style}\nKeywords: ${v.keywords || "none, surprise me"}`,
+    },
+    {
+      id: "content-creator",
+      title: "Gaming Content Creator",
+      desc: "Draft titles, scripts, or posts for your gaming content.",
+      icon: iconPlay,
+      color: "#f43f5e",
+      fields: [
+        { key: "game", label: "Game", type: "select", options: GAMES },
+        {
+          key: "format",
+          label: "Content format",
+          type: "select",
+          options: ["YouTube title ideas", "Video script outline", "Stream description", "Social media post"],
+        },
+        {
+          key: "topic",
+          label: "Topic",
+          type: "text",
+          placeholder: "e.g. My first Victory Royale montage",
+          required: true,
+        },
+      ],
+      systemPrompt:
+        "You are GameMind AI's content assistant for gaming creators. Write clean, ready-to-use content in the requested format. No emojis. No hashtags unless the format is a social post.",
+      buildPrompt: (v) => `Game: ${v.game}\nFormat: ${v.format}\nTopic: ${v.topic}`,
+    },
+    {
+      id: "game-guide",
+      title: "Game Guide",
+      desc: "Get a focused guide for a specific goal in your game.",
+      icon: iconCompass,
+      color: "#14b8a6",
+      fields: [
+        { key: "game", label: "Game", type: "select", options: GAMES },
+        {
+          key: "goal",
+          label: "What do you want a guide for?",
+          type: "textarea",
+          placeholder: "e.g. How to rotate safely in the final zone in BGMI",
+          required: true,
+        },
+      ],
+      systemPrompt:
+        "You are GameMind AI's guide writer. Produce a clear, step-by-step guide for the stated goal. Use short numbered steps and, if useful, a brief tips section at the end.",
+      buildPrompt: (v) => `Game: ${v.game}\nGoal: ${v.goal}`,
+    },
+  ];
+
+  /* ---------------------------------------------------------
+     Icons (inline SVG strings, reused across tool cards)
+     --------------------------------------------------------- */
+
+  function iconCube() {
+    return `<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M4.5 7.5L12 12l7.5-4.5M12 12v9" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+  }
+  function iconBook() {
+    return `<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H12v16H5.5A1.5 1.5 0 014 18.5v-13z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M20 5.5c0-.8-.7-1.5-1.5-1.5H12v16h6.5a1.5 1.5 0 001.5-1.5v-13z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+  }
+  function iconTarget() {
+    return `<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4.3" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>`;
+  }
+  function iconPerson() {
+    return `<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="currentColor" stroke-width="1.6"/><path d="M5 20c0-3.6 3.1-6.5 7-6.5s7 2.9 7 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+  }
+  function iconPlay() {
+    return `<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.2" stroke="currentColor" stroke-width="1.6"/><path d="M10 8.7l6 3.3-6 3.3V8.7z" fill="currentColor"/></svg>`;
+  }
+  function iconCompass() {
+    return `<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.2" stroke="currentColor" stroke-width="1.6"/><path d="M15 9l-2 5-4 1 2-5 4-1z" fill="currentColor" stroke="currentColor" stroke-width="0.6" stroke-linejoin="round"/></svg>`;
+  }
+
+  /* ---------------------------------------------------------
+     DOM references
+     --------------------------------------------------------- */
+
+  const $ = (sel) => document.querySelector(sel);
+
+  const els = {
+    screens: {
+      chat: $("#screen-chat"),
+      tools: $("#screen-tools"),
+      toolDetail: $("#screen-tool-detail"),
+      history: $("#screen-history"),
+      settings: $("#screen-settings"),
+    },
+    bottomNav: $("#bottomNav"),
+    newChatBtn: $("#newChatBtn"),
+
+    chatScroll: $("#chatScroll"),
+    emptyState: $("#emptyState"),
+    promptChips: $("#promptChips"),
+    messagesEl: $("#messages"),
+    typingRow: $("#typingRow"),
+    errorRow: $("#errorRow"),
+    errorText: $("#errorText"),
+    retryBtn: $("#retryBtn"),
+    composerForm: $("#composerForm"),
+    composerInput: $("#composerInput"),
+    sendBtn: $("#sendBtn"),
+
+    toolList: $("#toolList"),
+
+    toolBackBtn: $("#toolBackBtn"),
+    toolHeadingIcon: $("#toolHeadingIcon"),
+    toolTitle: $("#toolTitle"),
+    toolDesc: $("#toolDesc"),
+    toolForm: $("#toolForm"),
+    toolResult: $("#toolResult"),
+    toolResultIcon: $("#toolResultIcon"),
+    toolResultTitle: $("#toolResultTitle"),
+    toolResultBody: $("#toolResultBody"),
+    toolCopyBtn: $("#toolCopyBtn"),
+    toolRegenBtn: $("#toolRegenBtn"),
+    toolNewBtn: $("#toolNewBtn"),
+    toolError: $("#toolError"),
+
+    historyList: $("#historyList"),
+    historyEmptyHint: $("#historyEmptyHint"),
+
+    themeToggle: $("#themeToggle"),
+    clearHistoryBtn: $("#clearHistoryBtn"),
+  };
+
+  /* ---------------------------------------------------------
+     App state
+     --------------------------------------------------------- */
+
+  const state = {
+    screen: "chat",
+    chatMessages: [], // {role: 'user'|'assistant', content: string}
+    activeChatId: null,
+    lastFailedSend: null, // holds text to retry
+    activeTool: null,
+    lastToolValues: null,
+    settings: loadSettings(),
+  };
+
+  /* ---------------------------------------------------------
+     Persistence helpers
+     --------------------------------------------------------- */
+
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.settings);
+      if (!raw) return { theme: "dark" };
+      const parsed = JSON.parse(raw);
+      return { theme: parsed.theme === "darker" ? "darker" : "dark" };
+    } catch {
+      return { theme: "dark" };
+    }
+  }
+
+  function saveSettings() {
+    try {
+      localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(state.settings));
+    } catch {
+      /* storage unavailable — ignore */
+    }
+  }
+
+  function loadHistory() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.history);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveHistory(list) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(list.slice(0, MAX_HISTORY_ITEMS)));
+    } catch {
+      /* storage unavailable — ignore */
+    }
+  }
+
+  function upsertCurrentChatToHistory() {
+    if (state.chatMessages.length === 0) return;
+    const list = loadHistory();
+    const title = deriveChatTitle(state.chatMessages);
+    const now = Date.now();
+
+    if (state.activeChatId) {
+      const idx = list.findIndex((c) => c.id === state.activeChatId);
+      if (idx !== -1) {
+        list[idx] = { ...list[idx], title, messages: state.chatMessages, updatedAt: now };
+        saveHistory(list);
+        return;
+      }
+    }
+
+    const id = "chat_" + now + "_" + Math.random().toString(36).slice(2, 8);
+    state.activeChatId = id;
+    list.unshift({ id, title, messages: state.chatMessages, updatedAt: now });
+    saveHistory(list);
+  }
+
+  function deriveChatTitle(messages) {
+    const firstUser = messages.find((m) => m.role === "user");
+    if (!firstUser) return "New chat";
+    const text = firstUser.content.trim().replace(/\s+/g, " ");
+    return text.length > 48 ? text.slice(0, 48) + "…" : text;
+  }
+
+  /* ---------------------------------------------------------
+     Theme
+     --------------------------------------------------------- */
+
+  function applyTheme() {
+    document.documentElement.setAttribute(
+      "data-theme",
+      state.settings.theme === "darker" ? "darker" : ""
+    );
+    els.themeToggle.setAttribute("aria-checked", state.settings.theme === "darker" ? "true" : "false");
+  }
+
+  els.themeToggle.addEventListener("click", () => {
+    state.settings.theme = state.settings.theme === "darker" ? "dark" : "darker";
+    saveSettings();
+    applyTheme();
+  });
+
+  /* ---------------------------------------------------------
+     Navigation
+     --------------------------------------------------------- */
+
+  function navigate(screenName) {
+    state.screen = screenName;
+    Object.entries(els.screens).forEach(([name, el]) => {
+      el.hidden = name !== screenName;
+    });
+    els.bottomNav.querySelectorAll(".nav-btn").forEach((btn) => {
+      const navTarget = btn.dataset.nav;
+      const isToolsGroup = navTarget === "tools" && screenName === "tool-detail";
+      btn.classList.toggle("is-active", navTarget === screenName || isToolsGroup);
+    });
+
+    if (screenName === "history") renderHistoryList();
+    if (screenName === "tools") renderToolList();
+  }
+
+  els.bottomNav.querySelectorAll(".nav-btn").forEach((btn) => {
+    btn.addEventListener("click", () => navigate(btn.dataset.nav));
+  });
+
+  els.newChatBtn.addEventListener("click", () => {
+    startNewChat();
+    navigate("chat");
+  });
+
+  function startNewChat() {
+    if (state.chatMessages.length > 0) upsertCurrentChatToHistory();
+    state.chatMessages = [];
+    state.activeChatId = null;
+    state.lastFailedSend = null;
+    renderChat();
+  }
+
+  /* ---------------------------------------------------------
+     API call helper (shared by chat + tools)
+     --------------------------------------------------------- */
+
+  async function callChatApi(messages, system) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages, system }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error("The server sent back something unreadable. Please try again.");
+      }
+
+      if (!res.ok) {
+        throw new Error(data && data.error ? data.error : `Request failed (${res.status}). Please try again.`);
+      }
+
+      const reply = data && typeof data.reply === "string" ? data.reply.trim() : "";
+      if (!reply) {
+        throw new Error("GameMind AI didn't return a response. Please try again.");
+      }
+
+      return reply;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err.name === "AbortError") {
+        throw new Error("That took too long to respond. Please try again.");
+      }
+      if (err instanceof TypeError) {
+        throw new Error("Couldn't reach GameMind AI. Check your connection and try again.");
+      }
+      throw err;
+    }
+  }
+
+  /* ---------------------------------------------------------
+     Chat screen
+     --------------------------------------------------------- */
+
+  function renderChat() {
+    els.emptyState.hidden = state.chatMessages.length > 0;
+    els.messagesEl.innerHTML = "";
+
+    state.chatMessages.forEach((msg) => {
+      els.messagesEl.appendChild(renderBubble(msg));
+    });
+
+    scrollChatToBottom();
+  }
+
+  function renderBubble(msg) {
+    const row = document.createElement("div");
+    row.className = "bubble-row " + (msg.role === "user" ? "user" : "ai");
+    const bubble = document.createElement("div");
+    bubble.className = "bubble " + (msg.role === "user" ? "bubble-user" : "bubble-ai");
+    bubble.textContent = msg.content;
+    row.appendChild(bubble);
+    return row;
+  }
+
+  function scrollChatToBottom() {
+    requestAnimationFrame(() => {
+      els.chatScroll.scrollTop = els.chatScroll.scrollHeight;
+    });
+  }
+
+  function setChatLoading(isLoading) {
+    els.typingRow.hidden = !isLoading;
+    els.sendBtn.disabled = isLoading;
+    if (isLoading) scrollChatToBottom();
+  }
+
+  function showChatError(message) {
+    els.errorText.textContent = message;
+    els.errorRow.hidden = false;
+    scrollChatToBottom();
+  }
+
+  function hideChatError() {
+    els.errorRow.hidden = true;
+  }
+
+  async function sendChatMessage(text) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    hideChatError();
+    state.chatMessages.push({ role: "user", content: trimmed });
+    renderChat();
+    upsertCurrentChatToHistory();
+
+    els.composerInput.value = "";
+    autoResizeComposer();
+    setChatLoading(true);
+
+    try {
+      const reply = await callChatApi(state.chatMessages, GENERAL_SYSTEM_PROMPT);
+      state.chatMessages.push({ role: "assistant", content: reply });
+      state.lastFailedSend = null;
+      renderChat();
+      upsertCurrentChatToHistory();
+    } catch (err) {
+      state.lastFailedSend = trimmed;
+      showChatError(err.message || "Something went wrong. Please try again.");
+    } finally {
+      setChatLoading(false);
+    }
+  }
+
+  const GENERAL_SYSTEM_PROMPT =
+    "You are GameMind AI, a friendly and knowledgeable assistant for gamers. Help with strategy, tips, lore, and general gaming questions across titles like Minecraft, Free Fire, BGMI, Roblox, and GTA V. Keep answers clear, practical, and to the point. No emojis.";
+
+  els.composerForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    sendChatMessage(els.composerInput.value);
+  });
+
+  els.composerInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendChatMessage(els.composerInput.value);
+    }
+  });
+
+  els.composerInput.addEventListener("input", autoResizeComposer);
+
+  function autoResizeComposer() {
+    els.composerInput.style.height = "auto";
+    els.composerInput.style.height = Math.min(els.composerInput.scrollHeight, 140) + "px";
+  }
+
+  els.retryBtn.addEventListener("click", () => {
+    if (!state.lastFailedSend) return;
+    hideChatError();
+    // remove the trailing user message we already pushed, then resend
+    const text = state.lastFailedSend;
+    state.chatMessages.pop();
+    renderChat();
+    sendChatMessage(text);
+  });
+
+  els.promptChips.addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip");
+    if (!chip) return;
+    sendChatMessage(chip.dataset.prompt);
+  });
+
+  /* ---------------------------------------------------------
+     Tools list
+     --------------------------------------------------------- */
+
+  function renderToolList() {
+    els.toolList.innerHTML = "";
+    TOOLS.forEach((tool) => {
+      const btn = document.createElement("button");
+      btn.className = "tool-item";
+      const color = tool.color || "#7b6bff";
+      btn.innerHTML = `
+        <span class="tool-icon" style="background:${color}22;color:${color}">${tool.icon()}</span>
+        <span class="tool-item-text">
+          <span class="tool-item-title">${escapeHtml(tool.title)}</span>
+          <span class="tool-item-sub">${escapeHtml(tool.desc)}</span>
+        </span>
+        <span class="tool-item-chevron">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+      `;
+      btn.addEventListener("click", () => openTool(tool.id));
+      els.toolList.appendChild(btn);
+    });
+  }
+
+  /* ---------------------------------------------------------
+     Tool detail screen
+     --------------------------------------------------------- */
+
+  function openTool(toolId) {
+    const tool = TOOLS.find((t) => t.id === toolId);
+    if (!tool) return;
+    state.activeTool = tool;
+    state.lastToolValues = null;
+
+    els.toolTitle.textContent = tool.title;
+    els.toolDesc.textContent = tool.desc;
+    const color = tool.color || "#7b6bff";
+    els.toolHeadingIcon.style.background = color + "22";
+    els.toolHeadingIcon.style.color = color;
+    els.toolHeadingIcon.innerHTML = tool.icon();
+    els.toolResultIcon.style.background = color + "22";
+    els.toolResultIcon.style.color = color;
+    els.toolResultIcon.innerHTML = tool.icon();
+    els.toolResultTitle.textContent = tool.title;
+    renderToolForm(tool);
+    els.toolResult.hidden = true;
+    els.toolError.hidden = true;
+
+    navigate("tool-detail");
+  }
+
+  function renderToolForm(tool) {
+    els.toolForm.innerHTML = "";
+
+    tool.fields.forEach((field) => {
+      const wrap = document.createElement("div");
+      wrap.className = "field";
+
+      const label = document.createElement("label");
+      label.className = "field-label";
+      label.textContent = field.label;
+      label.setAttribute("for", "field_" + field.key);
+      wrap.appendChild(label);
+
+      let input;
+      if (field.type === "select") {
+        input = document.createElement("select");
+        field.options.forEach((opt) => {
+          const o = document.createElement("option");
+          o.value = opt;
+          o.textContent = opt;
+          input.appendChild(o);
+        });
+      } else if (field.type === "textarea") {
+        input = document.createElement("textarea");
+        if (field.placeholder) input.placeholder = field.placeholder;
+      } else {
+        input = document.createElement("input");
+        input.type = "text";
+        if (field.placeholder) input.placeholder = field.placeholder;
+      }
+      input.id = "field_" + field.key;
+      input.name = field.key;
+      if (field.required) input.required = true;
+
+      wrap.appendChild(input);
+      els.toolForm.appendChild(wrap);
+    });
+
+    const submitBtn = document.createElement("button");
+    submitBtn.type = "submit";
+    submitBtn.className = "primary-btn";
+    submitBtn.id = "toolGenerateBtn";
+    submitBtn.textContent = "Generate";
+    els.toolForm.appendChild(submitBtn);
+  }
+
+  els.toolForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const values = collectFormValues(state.activeTool);
+    state.lastToolValues = values;
+    runToolGeneration(values);
+  });
+
+  function collectFormValues(tool) {
+    const values = {};
+    tool.fields.forEach((field) => {
+      const el = document.getElementById("field_" + field.key);
+      values[field.key] = el ? el.value.trim() : "";
+    });
+    return values;
+  }
+
+  async function runToolGeneration(values) {
+    const tool = state.activeTool;
+    if (!tool) return;
+
+    els.toolError.hidden = true;
+    els.toolResult.hidden = true;
+    const btn = document.getElementById("toolGenerateBtn");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Generating…";
+    }
+
+    try {
+      const prompt = tool.buildPrompt(values);
+      const reply = await callChatApi([{ role: "user", content: prompt }], tool.systemPrompt);
+      els.toolResultBody.textContent = reply;
+      els.toolResult.hidden = false;
+    } catch (err) {
+      els.toolError.textContent = err.message || "Something went wrong. Please try again.";
+      els.toolError.hidden = false;
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Generate";
+      }
+    }
+  }
+
+  els.toolRegenBtn.addEventListener("click", () => {
+    if (state.lastToolValues) runToolGeneration(state.lastToolValues);
+  });
+
+  els.toolCopyBtn.addEventListener("click", async () => {
+    const text = els.toolResultBody.textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+      const original = els.toolCopyBtn.textContent;
+      els.toolCopyBtn.textContent = "Copied";
+      setTimeout(() => (els.toolCopyBtn.textContent = original), 1400);
+    } catch {
+      /* clipboard unavailable — silently ignore */
+    }
+  });
+
+  els.toolNewBtn.addEventListener("click", () => {
+    if (state.activeTool) {
+      renderToolForm(state.activeTool);
+      els.toolResult.hidden = true;
+      els.toolError.hidden = true;
+      state.lastToolValues = null;
+    }
+  });
+
+  els.toolBackBtn.addEventListener("click", () => navigate("tools"));
+
+  /* ---------------------------------------------------------
+     History screen
+     --------------------------------------------------------- */
+
+  function renderHistoryList() {
+    const list = loadHistory();
+    els.historyList.innerHTML = "";
+    els.historyEmptyHint.hidden = list.length > 0;
+
+    list.forEach((chat) => {
+      const item = document.createElement("div");
+      item.className = "history-item";
+
+      const main = document.createElement("button");
+      main.className = "history-item-main";
+      main.innerHTML = `
+        <div class="history-item-title">${escapeHtml(chat.title || "Untitled chat")}</div>
+        <div class="history-item-sub">${formatDate(chat.updatedAt)} · ${chat.messages.length} messages</div>
+      `;
+      main.addEventListener("click", () => openHistoryChat(chat.id));
+
+      const del = document.createElement("button");
+      del.className = "history-delete";
+      del.setAttribute("aria-label", "Delete chat");
+      del.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m2 0l-.8 12.2A2 2 0 0117.2 21H6.8a2 2 0 01-2-1.8L4 7h16z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      del.addEventListener("click", () => deleteHistoryChat(chat.id));
+
+      item.appendChild(main);
+      item.appendChild(del);
+      els.historyList.appendChild(item);
+    });
+  }
+
+  function openHistoryChat(id) {
+    const list = loadHistory();
+    const chat = list.find((c) => c.id === id);
+    if (!chat) return;
+
+    if (state.chatMessages.length > 0 && state.activeChatId !== id) {
+      upsertCurrentChatToHistory();
+    }
+
+    state.activeChatId = chat.id;
+    state.chatMessages = chat.messages.slice();
+    renderChat();
+    navigate("chat");
+  }
+
+  function deleteHistoryChat(id) {
+    let list = loadHistory();
+    list = list.filter((c) => c.id !== id);
+    saveHistory(list);
+    if (state.activeChatId === id) {
+      state.activeChatId = null;
+      state.chatMessages = [];
+      renderChat();
+    }
+    renderHistoryList();
+  }
+
+  /* ---------------------------------------------------------
+     Settings screen
+     --------------------------------------------------------- */
+
+  els.clearHistoryBtn.addEventListener("click", () => {
+    if (!confirm("Clear all saved chat history from this device?")) return;
+    saveHistory([]);
+    state.activeChatId = null;
+    state.chatMessages = [];
+    renderChat();
+    renderHistoryList();
+  });
+
+  /* ---------------------------------------------------------
+     Utilities
+     --------------------------------------------------------- */
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  function formatDate(ts) {
+    if (!ts) return "";
+    const d = new Date(ts);
+    const now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    if (sameDay) {
+      return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+    return d.toLocaleDateString([], { month: "short", day: "numeric" });
+  }
+
+  /* ---------------------------------------------------------
+     Init
+     --------------------------------------------------------- */
+
+  applyTheme();
+  renderChat();
+  navigate("chat");
+})();
+
+</script>
+</body>
+</html>
