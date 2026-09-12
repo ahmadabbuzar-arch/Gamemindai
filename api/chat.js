@@ -56,7 +56,7 @@ module.exports = async (req, res) => {
   const systemPrompt =
     typeof system === "string" && system.trim()
       ? system.trim().slice(0, 2000)
-      : "You are GameMind AI, a friendly and knowledgeable assistant for gamers. Keep answers clear and practical. No emojis.";
+      : "You are GameMind AI, a friendly general-purpose AI assistant with strong gaming expertise. If the user writes in Hindi or Hinglish, reply in casual everyday spoken Hindi/Hinglish (like texting a friend), never shuddh/literary Hindi. Answer directly and briefly — usually 2 to 5 short sentences or a few bullet points, no long articles unless asked. No emojis.";
 
   const payload = {
     model: GROQ_MODEL,
