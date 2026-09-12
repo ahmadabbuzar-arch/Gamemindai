@@ -40,6 +40,12 @@
   --radius-md: 12px;
   --radius-lg: 18px;
 
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+  --dur-slow: 250ms;
+
   --font-display: "Space Grotesk", "Inter", sans-serif;
   --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
@@ -72,19 +78,34 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-button {
+button, a, [role="button"] {
   font-family: inherit;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
-textarea, input {
+textarea, input, select {
   font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Remove default focus rings everywhere; a clean custom ring is
+   applied only for keyboard/programmatic focus via :focus-visible
+   further down. This avoids the ugly blue box on tap while keeping
+   the interface keyboard-accessible. */
+button, a, [role="button"], textarea, input, select {
+  outline: none;
+}
+button:focus, a:focus, [role="button"]:focus, textarea:focus, input:focus, select:focus {
+  outline: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
 
 /* ============================================================
@@ -98,6 +119,7 @@ textarea, input {
   max-width: 100%;
   margin: 0 auto;
   position: relative;
+  overscroll-behavior: contain;
 }
 
 .topbar {
@@ -140,10 +162,10 @@ textarea, input {
   border: none;
   background: var(--bg-elevated);
   color: var(--text);
-  transition: background 0.15s ease;
+  transition: background var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-out);
 }
 .icon-btn:hover { background: var(--border-strong); }
-.icon-btn:active { background: var(--bg-raised); }
+.icon-btn:active { background: var(--bg-raised); transform: scale(0.94); }
 
 .screens {
   flex: 1;
@@ -161,6 +183,15 @@ textarea, input {
 
 .screen[hidden] {
   display: none;
+}
+
+.screen:not([hidden]) {
+  animation: screenIn var(--dur-base) var(--ease-out) both;
+}
+
+@keyframes screenIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .screen-scroll {
@@ -203,17 +234,28 @@ textarea, input {
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  padding: 9px 4px 8px;
+  padding: 8px 4px 7px;
   background: none;
   border: none;
   color: var(--text-faint);
   font-size: 11px;
-  transition: color 0.15s ease;
+  transition: color var(--dur-fast) var(--ease-standard);
 }
 
-.nav-btn svg { transition: transform 0.15s ease; }
+.nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background var(--dur-fast) var(--ease-standard);
+}
+.nav-icon svg { transition: transform var(--dur-fast) var(--ease-out); }
+.nav-btn.is-active .nav-icon { background: var(--bg-elevated); }
 .nav-btn.is-active { color: var(--accent); }
-.nav-btn:active svg { transform: scale(0.92); }
+.nav-btn:active .nav-icon svg { transform: scale(0.92); }
 
 /* ============================================================
    Chat screen
@@ -233,7 +275,7 @@ textarea, input {
   align-items: center;
   text-align: center;
   padding: 10vh 12px 8px;
-  animation: rise 0.4s ease both;
+  animation: rise var(--dur-slow) var(--ease-out) both;
 }
 
 .empty-state[hidden] {
@@ -284,9 +326,10 @@ textarea, input {
   border-radius: var(--radius-md);
   font-size: 13.5px;
   font-weight: 500;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-out);
 }
 .chip:hover { border-color: var(--accent-soft-strong); background: var(--bg-elevated); }
+.chip:active { transform: scale(0.98); }
 
 .chip-icon {
   flex-shrink: 0;
@@ -322,11 +365,11 @@ textarea, input {
   line-height: 1.55;
   white-space: pre-wrap;
   word-wrap: break-word;
-  animation: pop 0.18s ease both;
+  animation: pop var(--dur-base) var(--ease-out) both;
 }
 
 @keyframes pop {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -403,7 +446,8 @@ textarea, input {
   border-radius: 26px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
-  transition: border-color 0.15s ease;
+  transition: border-color var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard);
+  box-shadow: 0 0 0 0 transparent;
 }
 
 .composer-plus {
@@ -417,9 +461,10 @@ textarea, input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-out);
 }
 .composer-plus:hover { background: var(--bg-raised); color: var(--text); }
+.composer-plus:active { transform: scale(0.92); }
 
 .composer-input {
   flex: 1;
@@ -434,7 +479,8 @@ textarea, input {
   outline: none;
 }
 .composer-input::placeholder { color: var(--text-faint); }
-.composer:focus-within { border-color: var(--accent-soft-strong); }
+.composer:focus-within { border-color: var(--accent-soft-strong); box-shadow: 0 0 0 3px var(--accent-soft); }
+.composer-input:focus-visible { box-shadow: none; }
 
 .send-btn {
   flex-shrink: 0;
@@ -447,7 +493,7 @@ textarea, input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s ease, transform 0.1s ease;
+  transition: background var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-out);
 }
 .send-btn:hover:not(:disabled) { background: var(--accent-2); }
 .send-btn:active:not(:disabled) { transform: scale(0.92); }
@@ -478,9 +524,10 @@ textarea, input {
   border-radius: var(--radius-md);
   padding: 13px 14px;
   color: var(--text);
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-out);
 }
 .tool-item:hover { border-color: var(--accent-soft-strong); background: var(--bg-elevated); }
+.tool-item:active { transform: scale(0.98); }
 
 .tool-icon {
   flex-shrink: 0;
@@ -562,7 +609,7 @@ textarea, input {
   font-size: 14px;
   outline: none;
   width: 100%;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--dur-fast) var(--ease-standard);
 }
 .field select:focus,
 .field input[type="text"]:focus,
@@ -586,7 +633,7 @@ textarea, input {
   padding: 13px 20px;
   font-size: 14.5px;
   font-weight: 600;
-  transition: background 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+  transition: background var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-standard);
 }
 .primary-btn:hover:not(:disabled) { background: var(--accent-2); }
 .primary-btn:active { transform: scale(0.98); }
@@ -603,9 +650,10 @@ textarea, input {
   padding: 8px 14px;
   font-size: 13px;
   font-weight: 500;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-out);
 }
 .ghost-btn:hover { background: var(--bg-elevated); color: var(--text); border-color: var(--border-strong); }
+.ghost-btn:active { transform: scale(0.96); }
 .ghost-btn svg { flex-shrink: 0; }
 
 .tool-result {
@@ -613,7 +661,7 @@ textarea, input {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   overflow: hidden;
-  animation: pop 0.2s ease both;
+  animation: pop var(--dur-slow) var(--ease-out) both;
 }
 
 .tool-result-header {
@@ -764,7 +812,7 @@ textarea, input {
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   position: relative;
-  transition: background 0.2s ease;
+  transition: background var(--dur-base) var(--ease-standard);
 }
 .toggle[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
 .toggle-knob {
@@ -773,7 +821,7 @@ textarea, input {
   width: 18px; height: 18px;
   border-radius: 50%;
   background: #fff;
-  transition: transform 0.2s ease;
+  transition: transform var(--dur-base) var(--ease-out);
 }
 .toggle[aria-checked="true"] .toggle-knob { transform: translateX(18px); }
 
@@ -817,13 +865,17 @@ textarea, input {
   border-radius: 8px;
 }
 
-/* Focus visibility */
+/* Focus visibility — a soft ring only for keyboard/programmatic
+   focus. Nothing shows on a plain tap or mouse click. */
 button:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
-input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+input:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-soft-strong);
+  transition: box-shadow var(--dur-fast) var(--ease-standard);
 }
 
 </style>
@@ -1037,20 +1089,20 @@ input:focus-visible {
   <!-- ===================== BOTTOM NAV ===================== -->
   <nav class="bottom-nav" id="bottomNav">
     <button class="nav-btn is-active" data-nav="chat">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H8l-4 4V5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
-      <span>Chat</span>
+      <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H8l-4 4V5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
+      <span class="nav-label">Chat</span>
     </button>
     <button class="nav-btn" data-nav="tools">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-      <span>Tools</span>
+      <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+      <span class="nav-label">Tools</span>
     </button>
     <button class="nav-btn" data-nav="history">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-      <span>History</span>
+      <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+      <span class="nav-label">History</span>
     </button>
     <button class="nav-btn" data-nav="settings">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 13.5a1.7 1.7 0 000-3l-1-.5a7 7 0 00-.6-1.4l.4-1.1a1.7 1.7 0 00-2.1-2.1l-1.1.4a7 7 0 00-1.4-.6l-.5-1a1.7 1.7 0 00-3 0l-.5 1a7 7 0 00-1.4.6l-1.1-.4a1.7 1.7 0 00-2.1 2.1l.4 1.1a7 7 0 00-.6 1.4l-1 .5a1.7 1.7 0 000 3l1 .5a7 7 0 00.6 1.4l-.4 1.1a1.7 1.7 0 002.1 2.1l1.1-.4a7 7 0 001.4.6l.5 1a1.7 1.7 0 003 0l.5-1a7 7 0 001.4-.6l1.1.4a1.7 1.7 0 002.1-2.1l-.4-1.1a7 7 0 00.6-1.4l1-.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
-      <span>Settings</span>
+      <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 13.5a1.7 1.7 0 000-3l-1-.5a7 7 0 00-.6-1.4l.4-1.1a1.7 1.7 0 00-2.1-2.1l-1.1.4a7 7 0 00-1.4-.6l-.5-1a1.7 1.7 0 00-3 0l-.5 1a7 7 0 00-1.4.6l-1.1-.4a1.7 1.7 0 00-2.1 2.1l.4 1.1a7 7 0 00-.6 1.4l-1 .5a1.7 1.7 0 000 3l1 .5a7 7 0 00.6 1.4l-.4 1.1a1.7 1.7 0 002.1 2.1l1.1-.4a7 7 0 001.4.6l.5 1a1.7 1.7 0 003 0l.5-1a7 7 0 001.4-.6l1.1.4a1.7 1.7 0 002.1-2.1l-.4-1.1a7 7 0 00.6-1.4l1-.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></span>
+      <span class="nav-label">Settings</span>
     </button>
   </nav>
 
@@ -1445,10 +1497,12 @@ input:focus-visible {
   }
 
   /* ---------------------------------------------------------
-     API call helper (shared by chat + tools)
+     API call helper (shared by chat + tools) — streams the
+     reply in as it's generated, calling onChunk(text) for each
+     piece that arrives, and resolves with the full trimmed reply.
      --------------------------------------------------------- */
 
-  async function callChatApi(messages, system) {
+  async function streamChatApi(messages, system, onChunk) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -1460,25 +1514,50 @@ input:focus-visible {
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
+      const contentType = res.headers.get("content-type") || "";
 
-      let data = null;
-      try {
-        data = await res.json();
-      } catch {
-        throw new Error("The server sent back something unreadable. Please try again.");
-      }
-
-      if (!res.ok) {
+      // Validation/config/upstream errors come back as a JSON body
+      // instead of a text stream — handle those the same way as before.
+      if (!res.ok || contentType.includes("application/json")) {
+        let data = null;
+        try {
+          data = await res.json();
+        } catch {
+          /* body wasn't valid JSON either — fall through to generic message */
+        }
+        clearTimeout(timeoutId);
         throw new Error(data && data.error ? data.error : `Request failed (${res.status}). Please try again.`);
       }
 
-      const reply = data && typeof data.reply === "string" ? data.reply.trim() : "";
-      if (!reply) {
-        throw new Error("GameMind AI didn't return a response. Please try again.");
+      if (!res.body || typeof res.body.getReader !== "function") {
+        // Streaming isn't available in this environment — read it whole.
+        const text = (await res.text()).trim();
+        clearTimeout(timeoutId);
+        if (!text) throw new Error("GameMind AI didn't return a response. Please try again.");
+        onChunk(text);
+        return text;
       }
 
-      return reply;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let full = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const piece = decoder.decode(value, { stream: true });
+        if (piece) {
+          full += piece;
+          onChunk(piece);
+        }
+      }
+
+      clearTimeout(timeoutId);
+      full = full.trim();
+      if (!full) {
+        throw new Error("GameMind AI didn't return a response. Please try again.");
+      }
+      return full;
     } catch (err) {
       clearTimeout(timeoutId);
       if (err.name === "AbortError") {
@@ -1516,9 +1595,16 @@ input:focus-visible {
     return row;
   }
 
+  const prefersReducedMotion =
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   function scrollChatToBottom() {
     requestAnimationFrame(() => {
-      els.chatScroll.scrollTop = els.chatScroll.scrollHeight;
+      els.chatScroll.scrollTo({
+        top: els.chatScroll.scrollHeight,
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+      });
     });
   }
 
@@ -1551,14 +1637,36 @@ input:focus-visible {
     autoResizeComposer();
     setChatLoading(true);
 
+    const assistantMsg = { role: "assistant", content: "" };
+    let bubbleTextEl = null;
+    let started = false;
+
+    const handleChunk = (chunk) => {
+      if (!started) {
+        started = true;
+        els.typingRow.hidden = true;
+        state.chatMessages.push(assistantMsg);
+        const row = renderBubble(assistantMsg);
+        bubbleTextEl = row.querySelector(".bubble");
+        els.messagesEl.appendChild(row);
+      }
+      assistantMsg.content += chunk;
+      bubbleTextEl.textContent = assistantMsg.content;
+      scrollChatToBottom();
+    };
+
     try {
-      const reply = await callChatApi(state.chatMessages, GENERAL_SYSTEM_PROMPT);
-      state.chatMessages.push({ role: "assistant", content: reply });
+      await streamChatApi(state.chatMessages, GENERAL_SYSTEM_PROMPT, handleChunk);
       state.lastFailedSend = null;
-      renderChat();
       upsertCurrentChatToHistory();
     } catch (err) {
       state.lastFailedSend = trimmed;
+      if (started) {
+        // Drop the incomplete reply rather than leaving a half-written
+        // message in the conversation; the error banner explains why.
+        state.chatMessages.pop();
+        renderChat();
+      }
       showChatError(err.message || "Something went wrong. Please try again.");
     } finally {
       setChatLoading(false);
@@ -1566,11 +1674,11 @@ input:focus-visible {
   }
 
   const GENERAL_SYSTEM_PROMPT =
-    "You are GameMind AI, a friendly general-purpose AI assistant with strong gaming expertise (Minecraft, Free Fire, BGMI, Roblox, GTA V, and more). You help with everyday questions just as much as gaming ones. " +
-    "Match the user's language and script exactly. If they write in Hindi or Hinglish, reply in casual, everyday spoken Hindi/Hinglish — the way people actually text on WhatsApp — never in shuddh/literary/Sanskritized Hindi and never mixing in unnecessarily formal or bookish words. If they write in English, reply in simple, natural English. " +
-    "Answer directly: no greetings, no restating the question, no unnecessary setup. Give the answer first, then any extra detail only if it's genuinely useful. " +
-    "Be brief. Most replies should be 2 to 5 short sentences, or a few short bullet points — think of a quick reply from a knowledgeable friend, not an essay. Never pad with extra explanation, background, or repetition the user didn't ask for. Only go longer when the user explicitly asks for detail, a full guide, or a long-form answer. " +
-    "Only ask a follow-up question when you truly need more information to help; otherwise just answer. No emojis.";
+    "You are GameMind AI, a friendly, natural-sounding general-purpose AI assistant with strong gaming expertise (Minecraft, Free Fire, BGMI, Roblox, GTA V, and more). You support everyday questions just as much as gaming ones. " +
+    "Match the user's language and script exactly. If they write in Hindi or Hinglish, reply in casual, everyday spoken Hindi/Hinglish — the way people actually text on WhatsApp — never in shuddh/literary/Sanskritized Hindi. If they write in English, reply in simple, natural English. " +
+    "Answer directly: no greetings, no restating the question, no unnecessary setup. Give the answer first, then extra detail only if it's genuinely useful. " +
+    "Keep it concise — usually 2 to 6 short paragraphs or a few concise bullet points. Give short answers for simple questions. Do not produce long articles or over-explain; go into detail only when the user clearly asks for it. " +
+    "Only ask a follow-up question when you truly need more information; otherwise just answer. No emojis.";
 
   els.composerForm.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -1723,18 +1831,26 @@ input:focus-visible {
 
     els.toolError.hidden = true;
     els.toolResult.hidden = true;
+    els.toolResultBody.textContent = "";
     const btn = document.getElementById("toolGenerateBtn");
     if (btn) {
       btn.disabled = true;
       btn.textContent = "Generating…";
     }
 
+    let started = false;
+
     try {
       const prompt = tool.buildPrompt(values);
-      const reply = await callChatApi([{ role: "user", content: prompt }], tool.systemPrompt);
-      els.toolResultBody.textContent = reply;
-      els.toolResult.hidden = false;
+      await streamChatApi([{ role: "user", content: prompt }], tool.systemPrompt, (chunk) => {
+        if (!started) {
+          started = true;
+          els.toolResult.hidden = false;
+        }
+        els.toolResultBody.textContent += chunk;
+      });
     } catch (err) {
+      els.toolResult.hidden = true;
       els.toolError.textContent = err.message || "Something went wrong. Please try again.";
       els.toolError.hidden = false;
     } finally {
