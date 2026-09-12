@@ -6,7 +6,7 @@
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 // Change this to swap models without touching any other code.
-const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
 const UPSTREAM_TIMEOUT_MS = 25000;
 const MAX_MESSAGES = 40;
