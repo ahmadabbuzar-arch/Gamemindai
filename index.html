@@ -81,7 +81,7 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-button, a, [role="button"] {
+button, a, [role="button"], summary {
   font-family: inherit;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -97,10 +97,10 @@ textarea, input, select {
    applied only for keyboard/programmatic focus via :focus-visible
    further down. This avoids the ugly blue box on tap while keeping
    the interface keyboard-accessible. */
-button, a, [role="button"], textarea, input, select {
+button, a, [role="button"], summary, textarea, input, select {
   outline: none;
 }
-button:focus, a:focus, [role="button"]:focus, textarea:focus, input:focus, select:focus {
+button:focus, a:focus, [role="button"]:focus, summary:focus, textarea:focus, input:focus, select:focus {
   outline: none;
 }
 
@@ -804,6 +804,43 @@ button:focus, a:focus, [role="button"]:focus, textarea:focus, input:focus, selec
 .settings-row-title { font-size: 14px; font-weight: 600; text-align: left; }
 .settings-row-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; text-align: left; }
 
+.settings-details summary {
+  list-style: none;
+  cursor: pointer;
+}
+.settings-details summary::-webkit-details-marker { display: none; }
+.settings-details summary::marker { content: ""; }
+
+.settings-chevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--text-faint);
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+.settings-details[open] .settings-chevron { transform: rotate(90deg); }
+
+.settings-details-body {
+  padding: 0 14px 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.settings-details-body p { margin: 0 0 10px; }
+.settings-details-body p:last-child { margin-bottom: 0; }
+.settings-details-body ul { margin: 0 0 10px; padding-left: 18px; }
+.settings-details-body li { margin-bottom: 4px; }
+.settings-details-body a { color: var(--accent); text-decoration: none; }
+.settings-details-body a:hover { text-decoration: underline; }
+
+.settings-contact-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+.settings-contact-link:hover { text-decoration: underline; }
+
 .toggle {
   flex-shrink: 0;
   width: 42px;
@@ -872,6 +909,7 @@ textarea:focus-visible,
 select:focus-visible,
 input:focus-visible,
 a:focus-visible,
+summary:focus-visible,
 [role="button"]:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-soft-strong);
@@ -1071,6 +1109,42 @@ a:focus-visible,
               <div class="settings-row-sub">Removes all saved chats from this device.</div>
             </div>
           </button>
+        </div>
+
+        <div class="settings-group">
+          <details class="settings-details">
+            <summary class="settings-row settings-row-btn">
+              <div>
+                <div class="settings-row-title">Privacy Policy</div>
+                <div class="settings-row-sub">How your data is handled.</div>
+              </div>
+              <span class="settings-chevron" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+            </summary>
+            <div class="settings-details-body">
+              <p>GameMind AI is built to keep as little data as possible off your device.</p>
+              <ul>
+                <li>Your chats, saved history, and theme preference are stored only in this browser's local storage — never on a server or database.</li>
+                <li>There are no accounts, no sign-in, and no tracking or analytics of any kind.</li>
+                <li>When you send a message or use a tool, the text is sent to Groq (our AI provider) only to generate a reply. It is not stored by GameMind AI afterward.</li>
+                <li>Clearing your chat history or your browser data removes everything — nothing else to delete elsewhere.</li>
+              </ul>
+              <p>Questions about privacy? Email <a href="mailto:sarimforbusiness@gmail.com">sarimforbusiness@gmail.com</a>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-row settings-row-static">
+            <div>
+              <div class="settings-row-title">Contact &amp; Support</div>
+              <div class="settings-row-sub">
+                Questions, feedback, or an issue to report? Reach out at
+                <a class="settings-contact-link" href="mailto:sarimforbusiness@gmail.com">sarimforbusiness@gmail.com</a>.
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="settings-group">
