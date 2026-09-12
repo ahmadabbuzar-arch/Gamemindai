@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>GameMind AI</title>
 <meta name="description" content="GameMind AI — a chat assistant and toolkit for gamers." />
-<meta name="theme-color" content="#0A0B10" />
+<meta name="theme-color" content="#0d0d0d" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -16,24 +16,25 @@
    ============================================================ */
 
 :root {
-  --bg: #0a0b10;
-  --bg-raised: #12141c;
-  --bg-elevated: #191c26;
-  --bg-input: #14161f;
-  --border: #23273580;
-  --border-strong: #2c3142;
+  --bg: #0d0d0d;
+  --bg-chat: #161616;
+  --bg-raised: #1e1e1e;
+  --bg-elevated: #262626;
+  --bg-input: #242424;
+  --border: #2e2e2e88;
+  --border-strong: #3a3a3a;
 
-  --text: #e9eaf2;
-  --text-muted: #9296ab;
-  --text-faint: #666b80;
+  --text: #ffffff;
+  --text-muted: #b0b0b0;
+  --text-faint: #6f6f6f;
 
   --accent: #7b6bff;
-  --accent-2: #4f8cff;
+  --accent-2: #6355d6;
   --accent-soft: #7b6bff1f;
   --accent-soft-strong: #7b6bff33;
 
-  --danger: #ff6b6b;
-  --danger-soft: #ff6b6b1a;
+  --danger: #ef5350;
+  --danger-soft: #ef53501a;
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -46,12 +47,13 @@
 }
 
 [data-theme="darker"] {
-  --bg: #05060a;
-  --bg-raised: #0c0e15;
-  --bg-elevated: #12141c;
-  --bg-input: #0e0f17;
-  --border: #1c1f2c80;
-  --border-strong: #242838;
+  --bg: #060606;
+  --bg-chat: #0e0e0e;
+  --bg-raised: #141414;
+  --bg-elevated: #1c1c1c;
+  --bg-input: #1c1c1c;
+  --border: #23232388;
+  --border-strong: #2c2c2c;
 }
 
 * { box-sizing: border-box; }
@@ -102,7 +104,7 @@ textarea, input {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
   flex-shrink: 0;
@@ -112,34 +114,36 @@ textarea, input {
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 
 .brand-mark {
   display: inline-flex;
-  color: var(--accent);
+  color: var(--text);
 }
 
 .brand-name {
   font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 16px;
-  letter-spacing: 0.01em;
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  color: var(--text);
 }
 
 .icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--bg-raised);
-  color: var(--text-muted);
-  transition: color 0.15s ease, border-color 0.15s ease;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: none;
+  background: var(--bg-elevated);
+  color: var(--text);
+  transition: background 0.15s ease;
 }
-.icon-btn:hover { color: var(--text); border-color: var(--border-strong); }
+.icon-btn:hover { background: var(--border-strong); }
+.icon-btn:active { background: var(--bg-raised); }
 
 .screens {
   flex: 1;
@@ -163,6 +167,7 @@ textarea, input {
   flex: 1;
   overflow-y: auto;
   padding: 20px 16px 28px;
+  background: var(--bg-chat);
   -webkit-overflow-scrolling: touch;
 }
 
@@ -218,6 +223,7 @@ textarea, input {
   flex: 1;
   overflow-y: auto;
   padding: 20px 14px 12px;
+  background: var(--bg-chat);
   -webkit-overflow-scrolling: touch;
 }
 
@@ -287,6 +293,8 @@ textarea, input {
   width: 28px;
   height: 28px;
   border-radius: 8px;
+  background: var(--bg-raised);
+  color: var(--text-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -308,9 +316,9 @@ textarea, input {
 
 .bubble {
   max-width: 84%;
-  padding: 11px 14px;
+  padding: 12px 15px;
   border-radius: var(--radius-lg);
-  font-size: 14.5px;
+  font-size: 16px;
   line-height: 1.55;
   white-space: pre-wrap;
   word-wrap: break-word;
@@ -323,8 +331,9 @@ textarea, input {
 }
 
 .bubble-user {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: #fff;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
   border-bottom-right-radius: 4px;
 }
 
@@ -361,8 +370,8 @@ textarea, input {
   justify-content: space-between;
   gap: 12px;
   background: var(--danger-soft);
-  border: 1px solid #ff6b6b40;
-  color: #ffb3b3;
+  border: 1px solid #ef535040;
+  color: #ffb4b1;
   padding: 11px 14px;
   border-radius: var(--radius-md);
   font-size: 13.5px;
@@ -380,47 +389,73 @@ textarea, input {
 
 /* Composer */
 
-.composer {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
+.composer-wrap {
   padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--border);
   background: var(--bg);
   flex-shrink: 0;
 }
 
+.composer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 8px;
+  border-radius: 26px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  transition: border-color 0.15s ease;
+}
+
+.composer-plus {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.composer-plus:hover { background: var(--bg-raised); color: var(--text); }
+
 .composer-input {
   flex: 1;
   resize: none;
-  max-height: 140px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
+  max-height: 120px;
+  background: transparent;
+  border: none;
   color: var(--text);
-  border-radius: var(--radius-md);
-  padding: 11px 14px;
-  font-size: 14.5px;
+  padding: 8px 4px;
+  font-size: 16px;
+  line-height: 1.4;
   outline: none;
-  transition: border-color 0.15s ease;
 }
-.composer-input:focus { border-color: var(--accent-soft-strong); }
 .composer-input::placeholder { color: var(--text-faint); }
+.composer:focus-within { border-color: var(--accent-soft-strong); }
 
 .send-btn {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-md);
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
   border: none;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: var(--accent);
   color: #fff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.1s ease, opacity 0.15s ease;
+  transition: background 0.15s ease, transform 0.1s ease;
 }
-.send-btn:active { transform: scale(0.94); }
-.send-btn:disabled { opacity: 0.45; cursor: default; }
+.send-btn:hover:not(:disabled) { background: var(--accent-2); }
+.send-btn:active:not(:disabled) { transform: scale(0.92); }
+.send-btn:disabled {
+  background: var(--bg-elevated);
+  color: var(--text-faint);
+  cursor: default;
+}
 
 /* ============================================================
    Tools list
@@ -452,8 +487,8 @@ textarea, input {
   width: 34px;
   height: 34px;
   border-radius: var(--radius-sm);
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -494,6 +529,8 @@ textarea, input {
   width: 32px;
   height: 32px;
   border-radius: 9px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -542,29 +579,34 @@ textarea, input {
 }
 
 .primary-btn {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: var(--accent);
   color: #fff;
   border: none;
-  border-radius: var(--radius-md);
-  padding: 13px 18px;
+  border-radius: 999px;
+  padding: 13px 20px;
   font-size: 14.5px;
   font-weight: 600;
-  transition: transform 0.1s ease, opacity 0.15s ease;
+  transition: background 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
 }
+.primary-btn:hover:not(:disabled) { background: var(--accent-2); }
 .primary-btn:active { transform: scale(0.98); }
 .primary-btn:disabled { opacity: 0.5; cursor: default; }
 
 .ghost-btn {
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: var(--radius-sm);
-  padding: 9px 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 8px 14px;
   font-size: 13px;
   font-weight: 500;
-  transition: border-color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.ghost-btn:hover { border-color: var(--accent-soft-strong); }
+.ghost-btn:hover { background: var(--bg-elevated); color: var(--text); border-color: var(--border-strong); }
+.ghost-btn svg { flex-shrink: 0; }
 
 .tool-result {
   background: var(--bg-raised);
@@ -590,6 +632,8 @@ textarea, input {
   width: 24px;
   height: 24px;
   border-radius: 7px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -614,8 +658,8 @@ textarea, input {
 .tool-error {
   margin-top: 14px;
   background: var(--danger-soft);
-  border: 1px solid #ff6b6b40;
-  color: #ffb3b3;
+  border: 1px solid #ef535040;
+  color: #ffb4b1;
   padding: 11px 14px;
   border-radius: var(--radius-md);
   font-size: 13.5px;
@@ -673,7 +717,7 @@ textarea, input {
   align-items: center;
   justify-content: center;
 }
-.history-delete:hover { color: var(--danger); border-color: #ff6b6b40; }
+.history-delete:hover { color: var(--danger); border-color: #ef535040; }
 
 .empty-hint {
   color: var(--text-faint);
@@ -822,30 +866,30 @@ input:focus-visible {
               <circle cx="18" cy="13.2" r="0.9" fill="currentColor"/>
             </svg>
           </span>
-          <h1 class="empty-title">What are we playing today?</h1>
-          <p class="empty-sub">Ask about a game, get a strategy, or pick a tool below.</p>
+          <h1 class="empty-title">What can I help with?</h1>
+          <p class="empty-sub">Ask anything — general questions, gaming tips, or pick a tool below.</p>
 
           <div class="prompt-chips" id="promptChips">
             <button class="chip" data-prompt="Suggest an efficient Minecraft base layout for survival.">
-              <span class="chip-icon" style="background:#22c55e26;color:#22c55e">
+              <span class="chip-icon">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M4.5 7.5L12 12l7.5-4.5M12 12v9" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
               </span>
               Help me in Minecraft
             </button>
             <button class="chip" data-prompt="Write me a short, exciting gaming story.">
-              <span class="chip-icon" style="background:#8b5cf626;color:#8b5cf6">
+              <span class="chip-icon">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H12v16H5.5A1.5 1.5 0 014 18.5v-13z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M20 5.5c0-.8-.7-1.5-1.5-1.5H12v16h6.5a1.5 1.5 0 001.5-1.5v-13z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
               </span>
               Give me a gaming story
             </button>
             <button class="chip" data-prompt="I need help with a game. What can you help me with?">
-              <span class="chip-icon" style="background:#38bdf826;color:#38bdf8">
+              <span class="chip-icon">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M7 8.5h10a4.5 4.5 0 014.4 5.5l-.5 2.2a2.6 2.6 0 01-4.6 1l-1-1.4a2 2 0 00-1.6-.8h-4.4a2 2 0 00-1.6.8l-1 1.4a2.6 2.6 0 01-4.6-1l-.5-2.2A4.5 4.5 0 017 8.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
               </span>
               Help me with a game
             </button>
             <button class="chip" data-prompt="Create a fun gaming challenge for me to try today.">
-              <span class="chip-icon" style="background:#f59e0b26;color:#f59e0b">
+              <span class="chip-icon">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M8 4h8v3a4 4 0 01-8 0V4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 5H5.5A1.5 1.5 0 004 6.5c0 2 1.5 3.5 3.5 3.7M16 5h2.5A1.5 1.5 0 0120 6.5c0 2-1.5 3.5-3.5 3.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 11v4m-3 3h6m-3-3v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
               </span>
               Create a gaming challenge
@@ -870,7 +914,11 @@ input:focus-visible {
 
       </div>
 
+      <div class="composer-wrap">
       <form class="composer" id="composerForm">
+        <button type="button" class="composer-plus" id="composerToolsBtn" aria-label="Open gaming tools" title="Gaming tools">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
         <textarea
           id="composerInput"
           class="composer-input"
@@ -879,9 +927,10 @@ input:focus-visible {
           maxlength="4000"
         ></textarea>
         <button type="submit" class="send-btn" id="sendBtn" aria-label="Send message">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 12l16-7-6.5 16-2.5-6.5L4 12z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </form>
+      </div>
     </section>
 
     <!-- ---------- TOOLS SCREEN ---------- -->
@@ -917,9 +966,18 @@ input:focus-visible {
           </div>
           <div class="tool-result-body" id="toolResultBody"></div>
           <div class="tool-result-actions">
-            <button type="button" class="ghost-btn" id="toolCopyBtn">Copy</button>
-            <button type="button" class="ghost-btn" id="toolRegenBtn">Regenerate</button>
-            <button type="button" class="ghost-btn" id="toolNewBtn">New request</button>
+            <button type="button" class="ghost-btn" id="toolCopyBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M5 15V6a2 2 0 012-2h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              <span id="toolCopyBtnLabel">Copy</span>
+            </button>
+            <button type="button" class="ghost-btn" id="toolRegenBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 0113.7-5.7L20 8M4 12a8 8 0 0013.7 5.7L20 16M20 8v-4M20 8h-4M20 16v4M20 16h-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Regenerate
+            </button>
+            <button type="button" class="ghost-btn" id="toolNewBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              New request
+            </button>
           </div>
         </div>
 
@@ -1033,7 +1091,6 @@ input:focus-visible {
       title: "Minecraft Helper",
       desc: "Ask about building, redstone, survival, farming, and more.",
       icon: iconCube,
-      color: "#22c55e",
       fields: [
         {
           key: "topic",
@@ -1050,7 +1107,7 @@ input:focus-visible {
         },
       ],
       systemPrompt:
-        "You are GameMind AI's Minecraft specialist. Give clear, accurate, practical Minecraft help. Use short paragraphs or steps. Avoid fluff.",
+        "You are GameMind AI's Minecraft specialist. Give clear, accurate, practical Minecraft help. Reply in the same language the user used (Hindi, Hinglish, or English). Use short paragraphs or steps. Avoid fluff.",
       buildPrompt: (v) => `Minecraft topic: ${v.topic}\nQuestion: ${v.question}`,
     },
     {
@@ -1058,7 +1115,6 @@ input:focus-visible {
       title: "Gaming Story Generator",
       desc: "Generate a short story or lore snippet set in your game.",
       icon: iconBook,
-      color: "#8b5cf6",
       fields: [
         { key: "game", label: "Game", type: "select", options: GAMES },
         {
@@ -1076,7 +1132,7 @@ input:focus-visible {
         },
       ],
       systemPrompt:
-        "You are GameMind AI's creative writer for gaming stories. Write vivid, well-structured short fiction (roughly 200-350 words) matching the requested tone and game setting. No preamble before the story.",
+        "You are GameMind AI's creative writer for gaming stories. Write vivid, well-structured short fiction (roughly 200-350 words) matching the requested tone and game setting. Write in the same language the user's inputs are in (Hindi, Hinglish, or English). No preamble before the story.",
       buildPrompt: (v) => `Game: ${v.game}\nTone: ${v.tone}\nStory idea: ${v.idea}`,
     },
     {
@@ -1084,7 +1140,6 @@ input:focus-visible {
       title: "Quest Generator",
       desc: "Create a quest or mission idea for your game or campaign.",
       icon: iconTarget,
-      color: "#f59e0b",
       fields: [
         { key: "game", label: "Game", type: "select", options: GAMES },
         {
@@ -1101,7 +1156,7 @@ input:focus-visible {
         },
       ],
       systemPrompt:
-        "You are GameMind AI's quest designer. Produce a well-structured quest with: a title, a short premise, objectives (numbered), and a reward suggestion. Keep it concise and game-ready.",
+        "You are GameMind AI's quest designer. Produce a well-structured quest with: a title, a short premise, objectives (numbered), and a reward suggestion. Reply in the same language the user's inputs are in (Hindi, Hinglish, or English). Keep it concise and game-ready.",
       buildPrompt: (v) =>
         `Game: ${v.game}\nQuest type: ${v.questType}\nSetting/theme: ${v.setting || "your choice"}`,
     },
@@ -1110,7 +1165,6 @@ input:focus-visible {
       title: "Gamer Name Generator",
       desc: "Get gamertag ideas that match a style or keyword.",
       icon: iconPerson,
-      color: "#38bdf8",
       fields: [
         {
           key: "style",
@@ -1134,7 +1188,6 @@ input:focus-visible {
       title: "Gaming Content Creator",
       desc: "Draft titles, scripts, or posts for your gaming content.",
       icon: iconPlay,
-      color: "#f43f5e",
       fields: [
         { key: "game", label: "Game", type: "select", options: GAMES },
         {
@@ -1152,7 +1205,7 @@ input:focus-visible {
         },
       ],
       systemPrompt:
-        "You are GameMind AI's content assistant for gaming creators. Write clean, ready-to-use content in the requested format. No emojis. No hashtags unless the format is a social post.",
+        "You are GameMind AI's content assistant for gaming creators. Write clean, ready-to-use content in the requested format. Match the language of the user's inputs (Hindi, Hinglish, or English). No emojis. No hashtags unless the format is a social post.",
       buildPrompt: (v) => `Game: ${v.game}\nFormat: ${v.format}\nTopic: ${v.topic}`,
     },
     {
@@ -1160,7 +1213,6 @@ input:focus-visible {
       title: "Game Guide",
       desc: "Get a focused guide for a specific goal in your game.",
       icon: iconCompass,
-      color: "#14b8a6",
       fields: [
         { key: "game", label: "Game", type: "select", options: GAMES },
         {
@@ -1172,7 +1224,7 @@ input:focus-visible {
         },
       ],
       systemPrompt:
-        "You are GameMind AI's guide writer. Produce a clear, step-by-step guide for the stated goal. Use short numbered steps and, if useful, a brief tips section at the end.",
+        "You are GameMind AI's guide writer. Produce a clear, step-by-step guide for the stated goal. Reply in the same language the user's inputs are in (Hindi, Hinglish, or English). Use short numbered steps and, if useful, a brief tips section at the end.",
       buildPrompt: (v) => `Game: ${v.game}\nGoal: ${v.goal}`,
     },
   ];
@@ -1210,7 +1262,7 @@ input:focus-visible {
     screens: {
       chat: $("#screen-chat"),
       tools: $("#screen-tools"),
-      toolDetail: $("#screen-tool-detail"),
+      "tool-detail": $("#screen-tool-detail"),
       history: $("#screen-history"),
       settings: $("#screen-settings"),
     },
@@ -1227,6 +1279,7 @@ input:focus-visible {
     retryBtn: $("#retryBtn"),
     composerForm: $("#composerForm"),
     composerInput: $("#composerInput"),
+    composerToolsBtn: $("#composerToolsBtn"),
     sendBtn: $("#sendBtn"),
 
     toolList: $("#toolList"),
@@ -1241,6 +1294,7 @@ input:focus-visible {
     toolResultTitle: $("#toolResultTitle"),
     toolResultBody: $("#toolResultBody"),
     toolCopyBtn: $("#toolCopyBtn"),
+    toolCopyBtnLabel: $("#toolCopyBtnLabel"),
     toolRegenBtn: $("#toolRegenBtn"),
     toolNewBtn: $("#toolNewBtn"),
     toolError: $("#toolError"),
@@ -1512,12 +1566,18 @@ input:focus-visible {
   }
 
   const GENERAL_SYSTEM_PROMPT =
-    "You are GameMind AI, a friendly and knowledgeable assistant for gamers. Help with strategy, tips, lore, and general gaming questions across titles like Minecraft, Free Fire, BGMI, Roblox, and GTA V. Keep answers clear, practical, and to the point. No emojis.";
+    "You are GameMind AI, a friendly general-purpose AI assistant with strong gaming expertise (Minecraft, Free Fire, BGMI, Roblox, GTA V, and more). You help with everyday questions just as much as gaming ones. " +
+    "Match the user's language and script exactly. If they write in Hindi or Hinglish, reply in casual, everyday spoken Hindi/Hinglish — the way people actually text on WhatsApp — never in shuddh/literary/Sanskritized Hindi and never mixing in unnecessarily formal or bookish words. If they write in English, reply in simple, natural English. " +
+    "Answer directly: no greetings, no restating the question, no unnecessary setup. Give the answer first, then any extra detail only if it's genuinely useful. " +
+    "Be brief. Most replies should be 2 to 5 short sentences, or a few short bullet points — think of a quick reply from a knowledgeable friend, not an essay. Never pad with extra explanation, background, or repetition the user didn't ask for. Only go longer when the user explicitly asks for detail, a full guide, or a long-form answer. " +
+    "Only ask a follow-up question when you truly need more information to help; otherwise just answer. No emojis.";
 
   els.composerForm.addEventListener("submit", (e) => {
     e.preventDefault();
     sendChatMessage(els.composerInput.value);
   });
+
+  els.composerToolsBtn.addEventListener("click", () => navigate("tools"));
 
   els.composerInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -1558,9 +1618,8 @@ input:focus-visible {
     TOOLS.forEach((tool) => {
       const btn = document.createElement("button");
       btn.className = "tool-item";
-      const color = tool.color || "#7b6bff";
       btn.innerHTML = `
-        <span class="tool-icon" style="background:${color}22;color:${color}">${tool.icon()}</span>
+        <span class="tool-icon">${tool.icon()}</span>
         <span class="tool-item-text">
           <span class="tool-item-title">${escapeHtml(tool.title)}</span>
           <span class="tool-item-sub">${escapeHtml(tool.desc)}</span>
@@ -1586,12 +1645,7 @@ input:focus-visible {
 
     els.toolTitle.textContent = tool.title;
     els.toolDesc.textContent = tool.desc;
-    const color = tool.color || "#7b6bff";
-    els.toolHeadingIcon.style.background = color + "22";
-    els.toolHeadingIcon.style.color = color;
     els.toolHeadingIcon.innerHTML = tool.icon();
-    els.toolResultIcon.style.background = color + "22";
-    els.toolResultIcon.style.color = color;
     els.toolResultIcon.innerHTML = tool.icon();
     els.toolResultTitle.textContent = tool.title;
     renderToolForm(tool);
@@ -1699,9 +1753,9 @@ input:focus-visible {
     const text = els.toolResultBody.textContent;
     try {
       await navigator.clipboard.writeText(text);
-      const original = els.toolCopyBtn.textContent;
-      els.toolCopyBtn.textContent = "Copied";
-      setTimeout(() => (els.toolCopyBtn.textContent = original), 1400);
+      const original = els.toolCopyBtnLabel.textContent;
+      els.toolCopyBtnLabel.textContent = "Copied";
+      setTimeout(() => (els.toolCopyBtnLabel.textContent = original), 1400);
     } catch {
       /* clipboard unavailable — silently ignore */
     }
