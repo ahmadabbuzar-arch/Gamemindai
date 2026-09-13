@@ -16,9 +16,18 @@ const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 // Change this to swap models without touching any other code.
 const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
+// Vision-capable model, used only for messages that include an image.
+// Groq's vision lineup changes more often than its text lineup — check
+// https://console.groq.com/docs/vision for the current model before
+// depending on this long-term.
+const GROQ_VISION_MODEL = process.env.GROQ_VISION_MODEL || "qwen/qwen3.6-27b";
+
 const UPSTREAM_TIMEOUT_MS = 25000;
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LENGTH = 6000;
+
+const ALLOWED_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8MB decoded — well under Groq's 20MB request limit
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -56,7 +65,7 @@ export async function POST(request) {
     return jsonError("Invalid request body.", 400);
   }
 
-  const { messages, system } = body || {};
+  const { messages, system, image } = body || {};
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return jsonError("No message provided.", 400);
@@ -67,14 +76,70 @@ export async function POST(request) {
 
   const cleanedMessages = [];
   for (const m of messages) {
-    if (!m || typeof m.content !== "string" || !m.content.trim()) continue;
+    if (!m || typeof m.content !== "string") continue;
     const role = m.role === "assistant" ? "assistant" : "user";
     cleanedMessages.push({ role, content: m.content.slice(0, MAX_MESSAGE_LENGTH) });
+  }
+  // Drop empty text-only messages, but keep the very last one even if
+  // empty — it may carry only an image with no caption text.
+  while (cleanedMessages.length > 1 && !cleanedMessages[0].content.trim()) {
+    cleanedMessages.shift();
   }
 
   if (cleanedMessages.length === 0) {
     return jsonError("No valid message content provided.", 400);
   }
+
+  const hasImagePayload = image != null;
+  if (!hasImagePayload && !cleanedMessages[cleanedMessages.length - 1].content.trim()) {
+    return jsonError("No message provided.", 400);
+  }
+
+  // ---- Image validation (optional) ----
+  let imageDataUrl = null;
+  let usingVision = false;
+
+  if (image != null) {
+    if (typeof image !== "object" || typeof image.mimeType !== "string" || typeof image.data !== "string") {
+      return jsonError("Invalid image data.", 400);
+    }
+    if (!ALLOWED_IMAGE_MIME_TYPES.includes(image.mimeType)) {
+      return jsonError("Please attach a PNG, JPEG, or WebP image.", 400);
+    }
+    if (!image.data.trim()) {
+      return jsonError("Invalid image data.", 400);
+    }
+
+    let byteLength;
+    try {
+      byteLength = Buffer.from(image.data, "base64").length;
+    } catch {
+      return jsonError("Invalid image data.", 400);
+    }
+    if (byteLength === 0) {
+      return jsonError("Invalid image data.", 400);
+    }
+    if (byteLength > MAX_IMAGE_BYTES) {
+      return jsonError("That image is too large. Please attach one under 8MB.", 400);
+    }
+
+    imageDataUrl = `data:${image.mimeType};base64,${image.data}`;
+    usingVision = true;
+  }
+
+  const lastMessage = cleanedMessages[cleanedMessages.length - 1];
+  const finalMessages = usingVision
+    ? [
+        ...cleanedMessages.slice(0, -1),
+        {
+          role: lastMessage.role,
+          content: [
+            { type: "text", text: lastMessage.content || "What can you tell me about this image?" },
+            { type: "image_url", image_url: { url: imageDataUrl } },
+          ],
+        },
+      ]
+    : cleanedMessages;
 
   const systemPrompt =
     typeof system === "string" && system.trim()
@@ -82,8 +147,8 @@ export async function POST(request) {
       : "You are GameMind AI, a friendly, natural-sounding general-purpose AI assistant with strong gaming expertise. If the user writes in Hindi or Hinglish, reply in casual everyday spoken Hindi/Hinglish (like texting a friend), never shuddh/literary Hindi. Answer directly and briefly — usually 2 to 6 short paragraphs or a few bullet points, no long articles unless the user asks for detail. No emojis.";
 
   const payload = {
-    model: GROQ_MODEL,
-    messages: [{ role: "system", content: systemPrompt }, ...cleanedMessages],
+    model: usingVision ? GROQ_VISION_MODEL : GROQ_MODEL,
+    messages: [{ role: "system", content: systemPrompt }, ...finalMessages],
     temperature: 0.8,
     max_tokens: 1024,
     stream: true,
