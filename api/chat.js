@@ -1,7 +1,15 @@
 // api/chat.js
-// Vercel serverless function — secure proxy to the Groq API.
-// The API key is read only from process.env.GROQ_API_KEY and is
-// never sent to, or exposed in, the frontend.
+// Vercel Function using the Web (Fetch API) handler signature — secure
+// proxy to the Groq API. The API key is read only from
+// process.env.GROQ_API_KEY and is never sent to, or exposed in, the
+// frontend.
+//
+// Using the Web signature (export async function POST(request) with a
+// standard Response) is intentional: Vercel's classic Node.js
+// (req, res) handler signature does NOT stream by default and needs a
+// special account-level flag to force it. The Web signature streams
+// out of the box, so the reply appears token-by-token as it's
+// generated instead of popping in all at once.
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
@@ -12,34 +20,49 @@ const UPSTREAM_TIMEOUT_MS = 25000;
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LENGTH = 6000;
 
-module.exports = async (req, res) => {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
-    return res.status(405).json({ error: "Method not allowed. Use POST." });
-  }
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
 
+function jsonError(message, status) {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { "Content-Type": "application/json; charset=utf-8", ...CORS_HEADERS },
+  });
+}
+
+// The browser sends a CORS preflight (OPTIONS) request before the real
+// POST whenever the page calling this API is on a different origin —
+// which is exactly the case when this endpoint is called from inside
+// an APK/WebView wrapper. Without this handler, that preflight fails
+// and the real request never goes out.
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
+
+export async function POST(request) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     console.error("GROQ_API_KEY is not set.");
-    return res.status(500).json({ error: "The server isn't configured yet. Please try again later." });
+    return jsonError("The server isn't configured yet. Please try again later.", 500);
   }
 
-  let body = req.body;
-  if (typeof body === "string") {
-    try {
-      body = JSON.parse(body);
-    } catch {
-      return res.status(400).json({ error: "Invalid request body." });
-    }
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonError("Invalid request body.", 400);
   }
 
   const { messages, system } = body || {};
 
   if (!Array.isArray(messages) || messages.length === 0) {
-    return res.status(400).json({ error: "No message provided." });
+    return jsonError("No message provided.", 400);
   }
   if (messages.length > MAX_MESSAGES) {
-    return res.status(400).json({ error: "This conversation is too long. Please start a new chat." });
+    return jsonError("This conversation is too long. Please start a new chat.", 400);
   }
 
   const cleanedMessages = [];
@@ -50,7 +73,7 @@ module.exports = async (req, res) => {
   }
 
   if (cleanedMessages.length === 0) {
-    return res.status(400).json({ error: "No valid message content provided." });
+    return jsonError("No valid message content provided.", 400);
   }
 
   const systemPrompt =
@@ -69,8 +92,9 @@ module.exports = async (req, res) => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
 
+  let groqRes;
   try {
-    const groqRes = await fetch(GROQ_API_URL, {
+    groqRes = await fetch(GROQ_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -79,94 +103,86 @@ module.exports = async (req, res) => {
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
-
-    if (!groqRes.ok) {
-      clearTimeout(timeoutId);
-      let data = null;
-      try {
-        data = await groqRes.json();
-      } catch {
-        /* upstream error body wasn't valid JSON — fall through to generic message */
-      }
-      const upstreamMessage =
-        data && data.error && data.error.message ? data.error.message : "The AI service returned an error.";
-      console.error("Groq API error:", groqRes.status, upstreamMessage);
-      return res.status(502).json({ error: "GameMind AI couldn't get a response right now. Please try again." });
-    }
-
-    if (!groqRes.body || typeof groqRes.body.getReader !== "function") {
-      clearTimeout(timeoutId);
-      return res.status(502).json({ error: "GameMind AI couldn't get a response right now. Please try again." });
-    }
-
-    // From here on we stream plain text tokens straight through to the
-    // browser as they arrive from Groq, so the reply appears the way it's
-    // being written instead of popping in all at once.
-    res.writeHead(200, {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      "X-Accel-Buffering": "no",
-    });
-
-    const reader = groqRes.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let receivedAny = false;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (!trimmedLine.startsWith("data:")) continue;
-        const dataStr = trimmedLine.slice(5).trim();
-        if (!dataStr || dataStr === "[DONE]") continue;
-
-        try {
-          const json = JSON.parse(dataStr);
-          const delta = json.choices && json.choices[0] && json.choices[0].delta && json.choices[0].delta.content;
-          if (delta) {
-            receivedAny = true;
-            res.write(delta);
-          }
-        } catch {
-          /* ignore a malformed SSE chunk and keep reading */
-        }
-      }
-    }
-
-    clearTimeout(timeoutId);
-
-    if (!receivedAny) {
-      // Headers are already sent as 200 plain text at this point, so we
-      // can't switch to a JSON error response — the client treats an
-      // empty stream as "no response" and shows its own error message.
-      console.error("Groq stream completed with no content.");
-    }
-
-    return res.end();
   } catch (err) {
     clearTimeout(timeoutId);
-    if (res.headersSent) {
-      // We were mid-stream when this failed; just end the connection.
-      // The client sees an incomplete/empty reply and surfaces its own
-      // "didn't get a response" error rather than a broken partial one.
-      console.error("Error while streaming Groq response:", err);
-      try {
-        return res.end();
-      } catch {
-        return;
-      }
-    }
     if (err.name === "AbortError") {
-      return res.status(504).json({ error: "The AI service took too long to respond. Please try again." });
+      return jsonError("The AI service took too long to respond. Please try again.", 504);
     }
     console.error("Unexpected error calling Groq API:", err);
-    return res.status(500).json({ error: "Something went wrong on our end. Please try again." });
+    return jsonError("Something went wrong on our end. Please try again.", 500);
   }
-};
+
+  if (!groqRes.ok) {
+    clearTimeout(timeoutId);
+    let data = null;
+    try {
+      data = await groqRes.json();
+    } catch {
+      /* upstream error body wasn't valid JSON — fall through to generic message */
+    }
+    const upstreamMessage =
+      data && data.error && data.error.message ? data.error.message : "The AI service returned an error.";
+    console.error("Groq API error:", groqRes.status, upstreamMessage);
+    return jsonError("GameMind AI couldn't get a response right now. Please try again.", 502);
+  }
+
+  if (!groqRes.body) {
+    clearTimeout(timeoutId);
+    return jsonError("GameMind AI couldn't get a response right now. Please try again.", 502);
+  }
+
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  // Re-package Groq's SSE stream ("data: {...}\n\n" lines) into plain
+  // text token chunks, so the browser can just read and append text
+  // without needing to know anything about the SSE/OpenAI format.
+  const stream = new ReadableStream({
+    async start(streamController) {
+      const reader = groqRes.body.getReader();
+      let buffer = "";
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine.startsWith("data:")) continue;
+            const dataStr = trimmedLine.slice(5).trim();
+            if (!dataStr || dataStr === "[DONE]") continue;
+
+            try {
+              const json = JSON.parse(dataStr);
+              const delta = json.choices && json.choices[0] && json.choices[0].delta && json.choices[0].delta.content;
+              if (delta) {
+                streamController.enqueue(encoder.encode(delta));
+              }
+            } catch {
+              /* ignore a malformed SSE chunk and keep reading */
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error while streaming Groq response:", err);
+      } finally {
+        clearTimeout(timeoutId);
+        streamController.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      ...CORS_HEADERS,
+    },
+  });
+}
