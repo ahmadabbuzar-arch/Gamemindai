@@ -127,11 +127,16 @@ button:focus, a:focus, [role="button"]:focus, summary:focus, textarea:focus, inp
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg);
-  flex-shrink: 0;
-  z-index: 5;
+  padding-top: max(12px, env(safe-area-inset-top));
+  background: transparent;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  pointer-events: none;
 }
+.topbar .icon-btn { pointer-events: auto; }
 
 .brand {
   display: flex;
@@ -197,7 +202,7 @@ button:focus, a:focus, [role="button"]:focus, summary:focus, textarea:focus, inp
 .screen-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 16px 28px;
+  padding: 60px 16px 28px;
   background: var(--bg-chat);
   -webkit-overflow-scrolling: touch;
 }
@@ -216,46 +221,174 @@ button:focus, a:focus, [role="button"]:focus, summary:focus, textarea:focus, inp
 }
 
 /* ============================================================
-   Bottom nav
+   Sidebar drawer + overlay
    ============================================================ */
 
-.bottom-nav {
-  display: flex;
-  border-top: 1px solid var(--border);
-  background: var(--bg);
-  flex-shrink: 0;
-  padding-bottom: env(safe-area-inset-bottom);
-  z-index: 5;
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-base) var(--ease-standard);
+  z-index: 40;
 }
+.sidebar-overlay.is-visible { opacity: 1; pointer-events: auto; }
+.sidebar-overlay[hidden] { display: block; }
 
-.nav-btn {
-  flex: 1;
+.sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: min(82vw, 300px);
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform var(--dur-slow) var(--ease-out);
+  z-index: 41;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.sidebar.is-open { transform: translateX(0); }
+
+.sidebar-header {
+  display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 8px 4px 7px;
-  background: none;
-  border: none;
-  color: var(--text-faint);
-  font-size: 11px;
-  transition: color var(--dur-fast) var(--ease-standard);
+  gap: 9px;
+  padding: 16px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sidebar-header .brand-name { font-family: var(--font-display); font-weight: 700; font-size: 16px; flex: 1; }
+.sidebar-close { margin-left: auto; }
+
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.nav-icon {
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 11px 10px;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease-standard);
+}
+.sidebar-item:hover { background: var(--bg-raised); }
+.sidebar-item:active { background: var(--bg-raised); }
+
+.sidebar-item-icon {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 26px;
-  border-radius: 999px;
-  background: transparent;
-  transition: background var(--dur-fast) var(--ease-standard);
+  color: var(--text-muted);
 }
-.nav-icon svg { transition: transform var(--dur-fast) var(--ease-out); }
-.nav-btn.is-active .nav-icon { background: var(--bg-elevated); }
-.nav-btn.is-active { color: var(--accent); }
-.nav-btn:active .nav-icon svg { transform: scale(0.92); }
+
+.sidebar-item-label { flex: 1; }
+
+.sidebar-details summary.sidebar-item { cursor: pointer; }
+.sidebar-details summary::-webkit-details-marker { display: none; }
+.sidebar-details summary::marker { content: ""; }
+
+.sidebar-chevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--text-faint);
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+.sidebar-details[open] .sidebar-chevron { transform: rotate(90deg); }
+
+.sidebar-subitems {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0 6px 30px;
+}
+
+.sidebar-tool-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+}
+.sidebar-tool-item:hover { background: var(--bg-raised); color: var(--text); }
+
+/* ============================================================
+   About modal
+   ============================================================ */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 60;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-base) var(--ease-standard);
+}
+.modal-overlay.is-visible { opacity: 1; pointer-events: auto; }
+.modal-overlay[hidden] { display: flex; }
+
+.modal-box {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  max-width: 380px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  transform: translateY(8px);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.modal-overlay.is-visible .modal-box { transform: translateY(0); }
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-title { font-family: var(--font-display); font-weight: 700; font-size: 15px; flex: 1; }
+
+.modal-body { padding: 16px; font-size: 13.5px; color: var(--text-muted); line-height: 1.6; }
+.modal-body p { margin: 0 0 10px; }
+.modal-body p:last-child { margin-bottom: 0; }
+.modal-body a { color: var(--accent); text-decoration: none; }
+.modal-body a:hover { text-decoration: underline; }
+
+/* ============================================================
+   Topbar title
+   ============================================================ */
+
+.topbar-title {
+  display: none;
+}
 
 /* ============================================================
    Chat screen
@@ -264,7 +397,7 @@ button:focus, a:focus, [role="button"]:focus, summary:focus, textarea:focus, inp
 .chat-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 14px 12px;
+  padding: 60px 14px 12px;
   background: var(--bg-chat);
   -webkit-overflow-scrolling: touch;
 }
@@ -363,9 +496,23 @@ button:focus, a:focus, [role="button"]:focus, summary:focus, textarea:focus, inp
   border-radius: var(--radius-lg);
   font-size: 16px;
   line-height: 1.55;
+  animation: pop var(--dur-base) var(--ease-out) both;
+}
+
+.bubble-text {
   white-space: pre-wrap;
   word-wrap: break-word;
-  animation: pop var(--dur-base) var(--ease-out) both;
+}
+.bubble-text:empty { display: none; }
+
+.bubble-image {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  width: auto;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  object-fit: cover;
 }
 
 @keyframes pop {
@@ -406,6 +553,12 @@ button:focus, a:focus, [role="button"]:focus, summary:focus, textarea:focus, inp
   40% { opacity: 1; }
 }
 
+.typing-label {
+  margin-left: 4px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
 .error-row { max-width: 640px; margin: 10px auto 0; }
 .error-card {
   display: flex;
@@ -436,6 +589,52 @@ button:focus, a:focus, [role="button"]:focus, summary:focus, textarea:focus, inp
   padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
   background: var(--bg);
   flex-shrink: 0;
+}
+
+.image-preview-row {
+  display: flex;
+  padding: 0 4px 8px;
+  animation: pop var(--dur-base) var(--ease-out) both;
+}
+.image-preview-row[hidden] { display: none; }
+
+.image-preview-chip {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+}
+.image-preview-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.image-preview-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-out);
+}
+.image-preview-remove:hover { background: rgba(0, 0, 0, 0.85); }
+.image-preview-remove:active { transform: scale(0.9); }
+
+.image-error {
+  padding: 0 4px 8px;
+  color: var(--danger);
+  font-size: 12.5px;
 }
 
 .composer {
@@ -767,6 +966,65 @@ button:focus, a:focus, [role="button"]:focus, summary:focus, textarea:focus, inp
 }
 .history-delete:hover { color: var(--danger); border-color: #ef535040; }
 
+.history-pin {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-faint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
+}
+.history-pin:hover { color: var(--text); border-color: var(--border-strong); }
+.history-pin.is-pinned { color: var(--accent); border-color: var(--accent-soft-strong); }
+
+.history-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  color: var(--text-faint);
+}
+.history-search-row input {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+}
+.history-search-row input::placeholder { color: var(--text-faint); }
+
+.history-filter-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.history-filter-chip {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
+}
+.history-filter-chip.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft-strong);
+  color: var(--accent);
+}
+
 .empty-hint {
   color: var(--text-faint);
   font-size: 13.5px;
@@ -873,24 +1131,6 @@ button:focus, a:focus, [role="button"]:focus, summary:focus, textarea:focus, inp
     border-left: 1px solid var(--border);
     border-right: 1px solid var(--border);
   }
-
-  .bottom-nav {
-    position: static;
-    order: -1;
-    flex-direction: column;
-    width: 100%;
-  }
-}
-
-@media (min-width: 860px) {
-  .app { flex-direction: row; flex-wrap: wrap; }
-  .topbar { width: 100%; order: 0; }
-  .bottom-nav {
-    flex-direction: row;
-    width: 100%;
-    order: 3;
-  }
-  .screens { width: 100%; order: 2; }
 }
 
 /* Scrollbar (desktop) */
@@ -920,21 +1160,85 @@ summary:focus-visible,
 </head>
 <body>
 
+<div class="sidebar-overlay" id="sidebarOverlay" hidden></div>
+
+<aside class="sidebar" id="sidebar" aria-hidden="true">
+  <div class="sidebar-header">
+    <span class="brand-mark" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <path d="M7 8.5h10a4.5 4.5 0 014.4 5.5l-.5 2.2a2.6 2.6 0 01-4.6 1l-1-1.4a2 2 0 00-1.6-.8h-4.4a2 2 0 00-1.6.8l-1 1.4a2.6 2.6 0 01-4.6-1l-.5-2.2A4.5 4.5 0 017 8.5z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M9 11v3M7.5 12.5h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        <circle cx="16" cy="11.2" r="0.9" fill="currentColor"/>
+        <circle cx="18" cy="13.2" r="0.9" fill="currentColor"/>
+      </svg>
+    </span>
+    <span class="brand-name">GameMind AI</span>
+    <button class="icon-btn sidebar-close" id="sidebarCloseBtn" aria-label="Close menu">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+
+  <nav class="sidebar-nav">
+    <button class="sidebar-item" id="sidebarNewChatBtn">
+      <span class="sidebar-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+      New Chat
+    </button>
+    <button class="sidebar-item" id="sidebarSearchBtn">
+      <span class="sidebar-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.7"/><path d="M20 20l-4.3-4.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+      Search Chats
+    </button>
+    <button class="sidebar-item" id="sidebarHistoryBtn">
+      <span class="sidebar-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+      Chat History
+    </button>
+
+    <details class="sidebar-details">
+      <summary class="sidebar-item sidebar-item-summary">
+        <span class="sidebar-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M7 8.5h10a4.5 4.5 0 014.4 5.5l-.5 2.2a2.6 2.6 0 01-4.6 1l-1-1.4a2 2 0 00-1.6-.8h-4.4a2 2 0 00-1.6.8l-1 1.4a2.6 2.6 0 01-4.6-1l-.5-2.2A4.5 4.5 0 017 8.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="16" cy="11.2" r="0.8" fill="currentColor"/><circle cx="18" cy="13.2" r="0.8" fill="currentColor"/></svg></span>
+        <span class="sidebar-item-label">Gaming Tools</span>
+        <span class="sidebar-chevron" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </summary>
+      <div class="sidebar-subitems" id="sidebarToolsList"></div>
+    </details>
+
+    <button class="sidebar-item" id="sidebarSavedBtn">
+      <span class="sidebar-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M7 4h10a1 1 0 011 1v15l-6-3.5L6 20V5a1 1 0 011-1z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
+      Saved Chats
+    </button>
+    <button class="sidebar-item" id="sidebarSettingsBtn">
+      <span class="sidebar-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 13.5a1.7 1.7 0 000-3l-1-.5a7 7 0 00-.6-1.4l.4-1.1a1.7 1.7 0 00-2.1-2.1l-1.1.4a7 7 0 00-1.4-.6l-.5-1a1.7 1.7 0 00-3 0l-.5 1a7 7 0 00-1.4.6l-1.1-.4a1.7 1.7 0 00-2.1 2.1l.4 1.1a7 7 0 00-.6 1.4l-1 .5a1.7 1.7 0 000 3l1 .5a7 7 0 00.6 1.4l-.4 1.1a1.7 1.7 0 002.1 2.1l1.1-.4a7 7 0 001.4.6l.5 1a1.7 1.7 0 003 0l.5-1a7 7 0 001.4-.6l1.1.4a1.7 1.7 0 002.1-2.1l-.4-1.1a7 7 0 00.6-1.4l1-.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></span>
+      Settings
+    </button>
+    <button class="sidebar-item" id="sidebarAboutBtn">
+      <span class="sidebar-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.2" stroke="currentColor" stroke-width="1.6"/><path d="M12 11v5.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="8" r="1" fill="currentColor"/></svg></span>
+      About GameMind AI
+    </button>
+  </nav>
+</aside>
+
+<div class="modal-overlay" id="aboutOverlay" hidden>
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">About GameMind AI</span>
+      <button class="icon-btn" id="aboutCloseBtn" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p>GameMind AI is a friendly general-purpose AI assistant with gaming expertise built in — ask anything, get help with everyday tasks, or use one of the built-in gaming tools.</p>
+      <p>Chats, history, and settings are stored only in this browser. Version 1.0.0.</p>
+      <p>Questions or feedback? Email <a href="mailto:sarimforbusiness@gmail.com">sarimforbusiness@gmail.com</a>.</p>
+    </div>
+  </div>
+</div>
+
 <div class="app" id="app">
 
-  <!-- ===================== SIDEBAR (desktop) / TOP BAR (mobile) ===================== -->
   <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-          <path d="M7 8.5h10a4.5 4.5 0 014.4 5.5l-.5 2.2a2.6 2.6 0 01-4.6 1l-1-1.4a2 2 0 00-1.6-.8h-4.4a2 2 0 00-1.6.8l-1 1.4a2.6 2.6 0 01-4.6-1l-.5-2.2A4.5 4.5 0 017 8.5z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
-          <path d="M9 11v3M7.5 12.5h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-          <circle cx="16" cy="11.2" r="0.9" fill="currentColor"/>
-          <circle cx="18" cy="13.2" r="0.9" fill="currentColor"/>
-        </svg>
-      </span>
-      <span class="brand-name">GameMind AI</span>
-    </div>
+    <button class="icon-btn" id="menuBtn" aria-label="Open menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+    <span class="topbar-title" id="topbarTitle">New chat</span>
     <button class="icon-btn" id="newChatBtn" title="New chat" aria-label="New chat">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
     </button>
@@ -957,7 +1261,7 @@ summary:focus-visible,
             </svg>
           </span>
           <h1 class="empty-title">What can I help with?</h1>
-          <p class="empty-sub">Ask anything — general questions, gaming tips, or pick a tool below.</p>
+          <p class="empty-sub">Ask anything — general questions, gaming tips, or attach an image.</p>
 
           <div class="prompt-chips" id="promptChips">
             <button class="chip" data-prompt="Suggest an efficient Minecraft base layout for survival.">
@@ -978,11 +1282,11 @@ summary:focus-visible,
               </span>
               Help me with a game
             </button>
-            <button class="chip" data-prompt="Create a fun gaming challenge for me to try today.">
+            <button class="chip" data-prompt-image="true">
               <span class="chip-icon">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M8 4h8v3a4 4 0 01-8 0V4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 5H5.5A1.5 1.5 0 004 6.5c0 2 1.5 3.5 3.5 3.7M16 5h2.5A1.5 1.5 0 0120 6.5c0 2-1.5 3.5-3.5 3.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 11v4m-3 3h6m-3-3v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="10" r="1.4" fill="currentColor"/><path d="M5 16l4.5-4.5L12 14l3-3 4 4" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
               </span>
-              Create a gaming challenge
+              Analyze an image
             </button>
           </div>
         </div>
@@ -992,6 +1296,7 @@ summary:focus-visible,
         <div class="typing-row" id="typingRow" hidden>
           <div class="bubble bubble-ai typing">
             <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="typing-label" id="typingLabel"></span>
           </div>
         </div>
 
@@ -1005,31 +1310,31 @@ summary:focus-visible,
       </div>
 
       <div class="composer-wrap">
-      <form class="composer" id="composerForm">
-        <button type="button" class="composer-plus" id="composerToolsBtn" aria-label="Open gaming tools" title="Gaming tools">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        </button>
-        <textarea
-          id="composerInput"
-          class="composer-input"
-          placeholder="Message GameMind AI…"
-          rows="1"
-          maxlength="4000"
-        ></textarea>
-        <button type="submit" class="send-btn" id="sendBtn" aria-label="Send message">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-      </form>
-      </div>
-    </section>
-
-    <!-- ---------- TOOLS SCREEN ---------- -->
-    <section class="screen" id="screen-tools" data-screen="tools" hidden>
-      <div class="screen-scroll">
-        <h1 class="screen-title">Gaming tools</h1>
-        <p class="screen-sub">Pick a tool to generate something useful for your game.</p>
-
-        <div class="tool-list" id="toolList"></div>
+        <div class="image-preview-row" id="imagePreviewRow" hidden>
+          <div class="image-preview-chip">
+            <img id="imagePreviewThumb" alt="Selected image preview" />
+            <button type="button" class="image-preview-remove" id="imageRemoveBtn" aria-label="Remove image">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="image-error" id="imageError" hidden></div>
+        <form class="composer" id="composerForm">
+          <button type="button" class="composer-plus" id="composerAttachBtn" aria-label="Attach an image" title="Attach an image">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+          <input type="file" id="imageInput" accept="image/png,image/jpeg,image/webp" hidden />
+          <textarea
+            id="composerInput"
+            class="composer-input"
+            placeholder="Message GameMind AI…"
+            rows="1"
+            maxlength="4000"
+          ></textarea>
+          <button type="submit" class="send-btn" id="sendBtn" aria-label="Send message">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </form>
       </div>
     </section>
 
@@ -1038,7 +1343,7 @@ summary:focus-visible,
       <div class="screen-scroll">
         <button class="back-btn" id="toolBackBtn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Tools
+          Chat
         </button>
 
         <div class="tool-heading">
@@ -1080,6 +1385,17 @@ summary:focus-visible,
       <div class="screen-scroll">
         <h1 class="screen-title">History</h1>
         <p class="screen-sub">Chats are stored only in this browser.</p>
+
+        <div class="history-search-row">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.7"/><path d="M20 20l-4.3-4.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <input type="text" id="historySearchInput" placeholder="Search chats" />
+        </div>
+
+        <div class="history-filter-row">
+          <button class="history-filter-chip is-active" id="historyFilterAll" data-filter="all">All</button>
+          <button class="history-filter-chip" id="historyFilterSaved" data-filter="saved">Saved</button>
+        </div>
+
         <div class="history-list" id="historyList"></div>
         <div class="empty-hint" id="historyEmptyHint" hidden>No saved chats yet.</div>
       </div>
@@ -1127,7 +1443,7 @@ summary:focus-visible,
               <ul>
                 <li>Your chats, saved history, and theme preference are stored only in this browser's local storage — never on a server or database.</li>
                 <li>There are no accounts, no sign-in, and no tracking or analytics of any kind.</li>
-                <li>When you send a message or use a tool, the text is sent to Groq (our AI provider) only to generate a reply. It is not stored by GameMind AI afterward.</li>
+                <li>When you send a message, image, or use a tool, the content is sent to Groq (our AI provider) only to generate a reply. It is not stored by GameMind AI afterward.</li>
                 <li>Clearing your chat history or your browser data removes everything — nothing else to delete elsewhere.</li>
               </ul>
               <p>Questions about privacy? Email <a href="mailto:sarimforbusiness@gmail.com">sarimforbusiness@gmail.com</a>.</p>
@@ -1151,7 +1467,7 @@ summary:focus-visible,
           <div class="settings-row settings-row-static">
             <div>
               <div class="settings-row-title">About GameMind AI</div>
-              <div class="settings-row-sub">GameMind AI is a chat assistant and toolkit built for gamers — ask questions, get strategies, and generate content for the games you play. Your chats stay on this device.</div>
+              <div class="settings-row-sub">GameMind AI is a chat assistant with gaming expertise, tools, and image analysis built in. Your chats stay on this device.</div>
             </div>
           </div>
         </div>
@@ -1159,26 +1475,6 @@ summary:focus-visible,
     </section>
 
   </main>
-
-  <!-- ===================== BOTTOM NAV ===================== -->
-  <nav class="bottom-nav" id="bottomNav">
-    <button class="nav-btn is-active" data-nav="chat">
-      <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H8l-4 4V5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
-      <span class="nav-label">Chat</span>
-    </button>
-    <button class="nav-btn" data-nav="tools">
-      <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
-      <span class="nav-label">Tools</span>
-    </button>
-    <button class="nav-btn" data-nav="history">
-      <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
-      <span class="nav-label">History</span>
-    </button>
-    <button class="nav-btn" data-nav="settings">
-      <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 13.5a1.7 1.7 0 000-3l-1-.5a7 7 0 00-.6-1.4l.4-1.1a1.7 1.7 0 00-2.1-2.1l-1.1.4a7 7 0 00-1.4-.6l-.5-1a1.7 1.7 0 00-3 0l-.5 1a7 7 0 00-1.4.6l-1.1-.4a1.7 1.7 0 00-2.1 2.1l.4 1.1a7 7 0 00-.6 1.4l-1 .5a1.7 1.7 0 000 3l1 .5a7 7 0 00.6 1.4l-.4 1.1a1.7 1.7 0 002.1 2.1l1.1-.4a7 7 0 001.4.6l.5 1a1.7 1.7 0 003 0l.5-1a7 7 0 001.4-.6l1.1.4a1.7 1.7 0 002.1-2.1l-.4-1.1a7 7 0 00.6-1.4l1-.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></span>
-      <span class="nav-label">Settings</span>
-    </button>
-  </nav>
 
 </div>
 
@@ -1204,6 +1500,10 @@ summary:focus-visible,
   const MAX_HISTORY_ITEMS = 50;
 
   const GAMES = ["Minecraft", "Free Fire", "BGMI", "Roblox", "GTA V", "Other"];
+
+  const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+  const MAX_IMAGE_FILE_BYTES = 8 * 1024 * 1024; // 8MB — validated before compression
+  const MAX_IMAGE_DIMENSION = 1024;
 
   /* ---------------------------------------------------------
      Tool definitions
@@ -1387,28 +1687,47 @@ summary:focus-visible,
   const els = {
     screens: {
       chat: $("#screen-chat"),
-      tools: $("#screen-tools"),
       "tool-detail": $("#screen-tool-detail"),
       history: $("#screen-history"),
       settings: $("#screen-settings"),
     },
-    bottomNav: $("#bottomNav"),
+
+    menuBtn: $("#menuBtn"),
+    topbarTitle: $("#topbarTitle"),
     newChatBtn: $("#newChatBtn"),
+
+    sidebarOverlay: $("#sidebarOverlay"),
+    sidebar: $("#sidebar"),
+    sidebarCloseBtn: $("#sidebarCloseBtn"),
+    sidebarNewChatBtn: $("#sidebarNewChatBtn"),
+    sidebarSearchBtn: $("#sidebarSearchBtn"),
+    sidebarHistoryBtn: $("#sidebarHistoryBtn"),
+    sidebarSavedBtn: $("#sidebarSavedBtn"),
+    sidebarSettingsBtn: $("#sidebarSettingsBtn"),
+    sidebarAboutBtn: $("#sidebarAboutBtn"),
+    sidebarToolsList: $("#sidebarToolsList"),
+
+    aboutOverlay: $("#aboutOverlay"),
+    aboutCloseBtn: $("#aboutCloseBtn"),
 
     chatScroll: $("#chatScroll"),
     emptyState: $("#emptyState"),
     promptChips: $("#promptChips"),
     messagesEl: $("#messages"),
     typingRow: $("#typingRow"),
+    typingLabel: $("#typingLabel"),
     errorRow: $("#errorRow"),
     errorText: $("#errorText"),
     retryBtn: $("#retryBtn"),
     composerForm: $("#composerForm"),
     composerInput: $("#composerInput"),
-    composerToolsBtn: $("#composerToolsBtn"),
+    composerAttachBtn: $("#composerAttachBtn"),
+    imageInput: $("#imageInput"),
+    imagePreviewRow: $("#imagePreviewRow"),
+    imagePreviewThumb: $("#imagePreviewThumb"),
+    imageRemoveBtn: $("#imageRemoveBtn"),
+    imageError: $("#imageError"),
     sendBtn: $("#sendBtn"),
-
-    toolList: $("#toolList"),
 
     toolBackBtn: $("#toolBackBtn"),
     toolHeadingIcon: $("#toolHeadingIcon"),
@@ -1425,6 +1744,9 @@ summary:focus-visible,
     toolNewBtn: $("#toolNewBtn"),
     toolError: $("#toolError"),
 
+    historySearchInput: $("#historySearchInput"),
+    historyFilterAll: $("#historyFilterAll"),
+    historyFilterSaved: $("#historyFilterSaved"),
     historyList: $("#historyList"),
     historyEmptyHint: $("#historyEmptyHint"),
 
@@ -1438,13 +1760,16 @@ summary:focus-visible,
 
   const state = {
     screen: "chat",
-    chatMessages: [], // {role: 'user'|'assistant', content: string}
+    chatMessages: [], // {role: 'user'|'assistant', content: string, image?: {dataUrl, mimeType}}
     activeChatId: null,
-    lastFailedSend: null, // holds text to retry
+    lastFailedSend: null, // { text, image } to support Retry
     activeTool: null,
     lastToolValues: null,
+    pendingImage: null, // { dataUrl, mimeType } attached but not yet sent
     settings: loadSettings(),
   };
+
+  const historyState = { filter: "all", query: "" };
 
   /* ---------------------------------------------------------
      Persistence helpers
@@ -1484,7 +1809,7 @@ summary:focus-visible,
     try {
       localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(list.slice(0, MAX_HISTORY_ITEMS)));
     } catch {
-      /* storage unavailable — ignore */
+      /* storage unavailable (or quota exceeded by large images) — ignore */
     }
   }
 
@@ -1505,14 +1830,15 @@ summary:focus-visible,
 
     const id = "chat_" + now + "_" + Math.random().toString(36).slice(2, 8);
     state.activeChatId = id;
-    list.unshift({ id, title, messages: state.chatMessages, updatedAt: now });
+    list.unshift({ id, title, messages: state.chatMessages, updatedAt: now, pinned: false });
     saveHistory(list);
   }
 
   function deriveChatTitle(messages) {
     const firstUser = messages.find((m) => m.role === "user");
     if (!firstUser) return "New chat";
-    const text = firstUser.content.trim().replace(/\s+/g, " ");
+    const text = (firstUser.content || (firstUser.image ? "Image" : "")).trim().replace(/\s+/g, " ");
+    if (!text) return "New chat";
     return text.length > 48 ? text.slice(0, 48) + "…" : text;
   }
 
@@ -1535,6 +1861,97 @@ summary:focus-visible,
   });
 
   /* ---------------------------------------------------------
+     Sidebar drawer
+     --------------------------------------------------------- */
+
+  function openSidebar() {
+    els.sidebarOverlay.hidden = false;
+    els.sidebar.setAttribute("aria-hidden", "false");
+    requestAnimationFrame(() => {
+      els.sidebarOverlay.classList.add("is-visible");
+      els.sidebar.classList.add("is-open");
+    });
+  }
+
+  function closeSidebar() {
+    els.sidebarOverlay.classList.remove("is-visible");
+    els.sidebar.classList.remove("is-open");
+    els.sidebar.setAttribute("aria-hidden", "true");
+    setTimeout(() => {
+      if (!els.sidebar.classList.contains("is-open")) els.sidebarOverlay.hidden = true;
+    }, 260);
+  }
+
+  els.menuBtn.addEventListener("click", openSidebar);
+  els.sidebarCloseBtn.addEventListener("click", closeSidebar);
+  els.sidebarOverlay.addEventListener("click", closeSidebar);
+
+  els.sidebarNewChatBtn.addEventListener("click", () => {
+    closeSidebar();
+    startNewChat();
+    navigate("chat");
+  });
+  els.sidebarSearchBtn.addEventListener("click", () => {
+    closeSidebar();
+    historyState.filter = "all";
+    navigate("history");
+    setTimeout(() => els.historySearchInput.focus(), 260);
+  });
+  els.sidebarHistoryBtn.addEventListener("click", () => {
+    closeSidebar();
+    historyState.filter = "all";
+    navigate("history");
+  });
+  els.sidebarSavedBtn.addEventListener("click", () => {
+    closeSidebar();
+    historyState.filter = "saved";
+    navigate("history");
+  });
+  els.sidebarSettingsBtn.addEventListener("click", () => {
+    closeSidebar();
+    navigate("settings");
+  });
+  els.sidebarAboutBtn.addEventListener("click", () => {
+    closeSidebar();
+    openAbout();
+  });
+
+  function renderSidebarTools() {
+    els.sidebarToolsList.innerHTML = "";
+    TOOLS.forEach((tool) => {
+      const btn = document.createElement("button");
+      btn.className = "sidebar-tool-item";
+      btn.innerHTML = `<span class="sidebar-item-icon">${tool.icon()}</span><span>${escapeHtml(tool.title)}</span>`;
+      btn.addEventListener("click", () => {
+        closeSidebar();
+        openTool(tool.id);
+      });
+      els.sidebarToolsList.appendChild(btn);
+    });
+  }
+
+  /* ---------------------------------------------------------
+     About modal
+     --------------------------------------------------------- */
+
+  function openAbout() {
+    els.aboutOverlay.hidden = false;
+    requestAnimationFrame(() => els.aboutOverlay.classList.add("is-visible"));
+  }
+
+  function closeAbout() {
+    els.aboutOverlay.classList.remove("is-visible");
+    setTimeout(() => {
+      if (!els.aboutOverlay.classList.contains("is-visible")) els.aboutOverlay.hidden = true;
+    }, 220);
+  }
+
+  els.aboutCloseBtn.addEventListener("click", closeAbout);
+  els.aboutOverlay.addEventListener("click", (e) => {
+    if (e.target === els.aboutOverlay) closeAbout();
+  });
+
+  /* ---------------------------------------------------------
      Navigation
      --------------------------------------------------------- */
 
@@ -1543,19 +1960,20 @@ summary:focus-visible,
     Object.entries(els.screens).forEach(([name, el]) => {
       el.hidden = name !== screenName;
     });
-    els.bottomNav.querySelectorAll(".nav-btn").forEach((btn) => {
-      const navTarget = btn.dataset.nav;
-      const isToolsGroup = navTarget === "tools" && screenName === "tool-detail";
-      btn.classList.toggle("is-active", navTarget === screenName || isToolsGroup);
-    });
 
     if (screenName === "history") renderHistoryList();
-    if (screenName === "tools") renderToolList();
+    updateTopbarTitle();
   }
 
-  els.bottomNav.querySelectorAll(".nav-btn").forEach((btn) => {
-    btn.addEventListener("click", () => navigate(btn.dataset.nav));
-  });
+  function updateTopbarTitle() {
+    const titleMap = {
+      chat: state.chatMessages.length ? deriveChatTitle(state.chatMessages) : "New chat",
+      "tool-detail": state.activeTool ? state.activeTool.title : "Tool",
+      history: "History",
+      settings: "Settings",
+    };
+    els.topbarTitle.textContent = titleMap[state.screen] || "GameMind AI";
+  }
 
   els.newChatBtn.addEventListener("click", () => {
     startNewChat();
@@ -1567,6 +1985,7 @@ summary:focus-visible,
     state.chatMessages = [];
     state.activeChatId = null;
     state.lastFailedSend = null;
+    clearPendingImage();
     renderChat();
   }
 
@@ -1576,7 +1995,7 @@ summary:focus-visible,
      piece that arrives, and resolves with the full trimmed reply.
      --------------------------------------------------------- */
 
-  async function streamChatApi(messages, system, onChunk) {
+  async function streamChatApi(messages, system, onChunk, image) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -1584,7 +2003,7 @@ summary:focus-visible,
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages, system }),
+        body: JSON.stringify({ messages, system, image: image || undefined }),
         signal: controller.signal,
       });
 
@@ -1657,6 +2076,7 @@ summary:focus-visible,
     });
 
     scrollChatToBottom();
+    updateTopbarTitle();
   }
 
   function renderBubble(msg) {
@@ -1664,7 +2084,20 @@ summary:focus-visible,
     row.className = "bubble-row " + (msg.role === "user" ? "user" : "ai");
     const bubble = document.createElement("div");
     bubble.className = "bubble " + (msg.role === "user" ? "bubble-user" : "bubble-ai");
-    bubble.textContent = msg.content;
+
+    if (msg.image && msg.image.dataUrl) {
+      const img = document.createElement("img");
+      img.className = "bubble-image";
+      img.src = msg.image.dataUrl;
+      img.alt = "Attached image";
+      bubble.appendChild(img);
+    }
+
+    const textEl = document.createElement("div");
+    textEl.className = "bubble-text";
+    textEl.textContent = msg.content || "";
+    bubble.appendChild(textEl);
+
     row.appendChild(bubble);
     return row;
   }
@@ -1682,9 +2115,10 @@ summary:focus-visible,
     });
   }
 
-  function setChatLoading(isLoading) {
+  function setChatLoading(isLoading, isImage) {
     els.typingRow.hidden = !isLoading;
     els.sendBtn.disabled = isLoading;
+    if (els.typingLabel) els.typingLabel.textContent = isLoading && isImage ? "Analyzing image…" : "";
     if (isLoading) scrollChatToBottom();
   }
 
@@ -1698,18 +2132,35 @@ summary:focus-visible,
     els.errorRow.hidden = true;
   }
 
+  function buildApiMessages(messages) {
+    return messages.map((m, idx) => {
+      const isLast = idx === messages.length - 1;
+      let content = m.content || "";
+      if (m.image && !isLast) {
+        content = (content ? content + " " : "") + "[An image was shared earlier in this conversation.]";
+      }
+      return { role: m.role, content };
+    });
+  }
+
   async function sendChatMessage(text) {
-    const trimmed = text.trim();
-    if (!trimmed) return;
+    const trimmed = (text || "").trim();
+    const image = state.pendingImage;
+    if (!trimmed && !image) return;
 
     hideChatError();
-    state.chatMessages.push({ role: "user", content: trimmed });
+
+    const userMsg = { role: "user", content: trimmed };
+    if (image) userMsg.image = { dataUrl: image.dataUrl, mimeType: image.mimeType };
+
+    state.chatMessages.push(userMsg);
     renderChat();
     upsertCurrentChatToHistory();
 
     els.composerInput.value = "";
     autoResizeComposer();
-    setChatLoading(true);
+    clearPendingImage();
+    setChatLoading(true, !!image);
 
     const assistantMsg = { role: "assistant", content: "" };
     let bubbleTextEl = null;
@@ -1721,7 +2172,7 @@ summary:focus-visible,
         els.typingRow.hidden = true;
         state.chatMessages.push(assistantMsg);
         const row = renderBubble(assistantMsg);
-        bubbleTextEl = row.querySelector(".bubble");
+        bubbleTextEl = row.querySelector(".bubble-text");
         els.messagesEl.appendChild(row);
       }
       assistantMsg.content += chunk;
@@ -1730,11 +2181,12 @@ summary:focus-visible,
     };
 
     try {
-      await streamChatApi(state.chatMessages, GENERAL_SYSTEM_PROMPT, handleChunk);
+      const apiImage = image ? { mimeType: image.mimeType, data: image.dataUrl.split(",")[1] } : null;
+      await streamChatApi(buildApiMessages(state.chatMessages), GENERAL_SYSTEM_PROMPT, handleChunk, apiImage);
       state.lastFailedSend = null;
       upsertCurrentChatToHistory();
     } catch (err) {
-      state.lastFailedSend = trimmed;
+      state.lastFailedSend = { text: trimmed, image };
       if (started) {
         // Drop the incomplete reply rather than leaving a half-written
         // message in the conversation; the error banner explains why.
@@ -1748,18 +2200,17 @@ summary:focus-visible,
   }
 
   const GENERAL_SYSTEM_PROMPT =
-    "You are GameMind AI, a friendly, natural-sounding general-purpose AI assistant with strong gaming expertise (Minecraft, Free Fire, BGMI, Roblox, GTA V, and more). You support everyday questions just as much as gaming ones. " +
+    "You are GameMind AI, a friendly, natural-sounding general-purpose AI assistant. You help with everything: everyday questions, studying, technology, coding, writing, brainstorming ideas, daily tasks, image analysis, and gaming (Minecraft, Free Fire, BGMI, Roblox, GTA V, and more). " +
     "Match the user's language and script exactly. If they write in Hindi or Hinglish, reply in casual, everyday spoken Hindi/Hinglish — the way people actually text on WhatsApp — never in shuddh/literary/Sanskritized Hindi. If they write in English, reply in simple, natural English. " +
     "Answer directly: no greetings, no restating the question, no unnecessary setup. Give the answer first, then extra detail only if it's genuinely useful. " +
     "Keep it concise — usually 2 to 6 short paragraphs or a few concise bullet points. Give short answers for simple questions. Do not produce long articles or over-explain; go into detail only when the user clearly asks for it. " +
-    "Only ask a follow-up question when you truly need more information; otherwise just answer. No emojis.";
+    "Only ask a follow-up question when you truly need more information; otherwise just answer. No emojis. " +
+    "When an image is attached, describe or answer about it directly, read any visible text (OCR), and analyze screenshots, UI/app designs, error messages, diagrams, or Minecraft builds and gameplay as needed. If the image is blurry, cropped, or a detail isn't clearly visible, say so plainly instead of guessing — never invent details you can't actually see.";
 
   els.composerForm.addEventListener("submit", (e) => {
     e.preventDefault();
     sendChatMessage(els.composerInput.value);
   });
-
-  els.composerToolsBtn.addEventListener("click", () => navigate("tools"));
 
   els.composerInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -1778,41 +2229,115 @@ summary:focus-visible,
   els.retryBtn.addEventListener("click", () => {
     if (!state.lastFailedSend) return;
     hideChatError();
+    const { text, image } = state.lastFailedSend;
     // remove the trailing user message we already pushed, then resend
-    const text = state.lastFailedSend;
     state.chatMessages.pop();
     renderChat();
+    if (image) state.pendingImage = image;
     sendChatMessage(text);
   });
 
   els.promptChips.addEventListener("click", (e) => {
     const chip = e.target.closest(".chip");
     if (!chip) return;
+    if (chip.dataset.promptImage) {
+      els.imageInput.click();
+      return;
+    }
     sendChatMessage(chip.dataset.prompt);
   });
 
   /* ---------------------------------------------------------
-     Tools list
+     Image attachment
      --------------------------------------------------------- */
 
-  function renderToolList() {
-    els.toolList.innerHTML = "";
-    TOOLS.forEach((tool) => {
-      const btn = document.createElement("button");
-      btn.className = "tool-item";
-      btn.innerHTML = `
-        <span class="tool-icon">${tool.icon()}</span>
-        <span class="tool-item-text">
-          <span class="tool-item-title">${escapeHtml(tool.title)}</span>
-          <span class="tool-item-sub">${escapeHtml(tool.desc)}</span>
-        </span>
-        <span class="tool-item-chevron">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </span>
-      `;
-      btn.addEventListener("click", () => openTool(tool.id));
-      els.toolList.appendChild(btn);
+  els.composerAttachBtn.addEventListener("click", () => els.imageInput.click());
+
+  els.imageInput.addEventListener("change", async () => {
+    const file = els.imageInput.files && els.imageInput.files[0];
+    els.imageInput.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+
+    els.imageError.hidden = true;
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      showImageError("Please choose a PNG, JPEG, or WebP image.");
+      return;
+    }
+    if (file.size > MAX_IMAGE_FILE_BYTES) {
+      showImageError("That image is too large. Please choose one under 8MB.");
+      return;
+    }
+
+    try {
+      const compressed = await compressImageFile(file);
+      state.pendingImage = compressed;
+      els.imagePreviewThumb.src = compressed.dataUrl;
+      els.imagePreviewRow.hidden = false;
+    } catch (err) {
+      showImageError(err.message || "Couldn't load that image. Please try another.");
+    }
+  });
+
+  els.imageRemoveBtn.addEventListener("click", () => clearPendingImage());
+
+  function clearPendingImage() {
+    state.pendingImage = null;
+    els.imagePreviewRow.hidden = true;
+    els.imagePreviewThumb.src = "";
+    els.imageError.hidden = true;
+  }
+
+  function showImageError(message) {
+    els.imageError.textContent = message;
+    els.imageError.hidden = false;
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("Couldn't read that file."));
+      reader.readAsDataURL(file);
     });
+  }
+
+  function loadImageElement(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("That doesn't look like a valid image."));
+      img.src = dataUrl;
+    });
+  }
+
+  async function compressImageFile(file) {
+    const originalDataUrl = await readFileAsDataUrl(file);
+    const img = await loadImageElement(originalDataUrl);
+
+    let width = img.naturalWidth || img.width;
+    let height = img.naturalHeight || img.height;
+    if (!width || !height) throw new Error("That doesn't look like a valid image.");
+
+    if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+      const scale = MAX_IMAGE_DIMENSION / Math.max(width, height);
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return { dataUrl: originalDataUrl, mimeType: file.type };
+    ctx.drawImage(img, 0, 0, width, height);
+
+    // Keep PNGs as PNG (sharp text/UI screenshots, transparency);
+    // everything else becomes JPEG to keep the payload small.
+    const outputType = file.type === "image/png" ? "image/png" : "image/jpeg";
+    const dataUrl = outputType === "image/jpeg" ? canvas.toDataURL(outputType, 0.75) : canvas.toDataURL(outputType);
+
+    return { dataUrl, mimeType: outputType };
   }
 
   /* ---------------------------------------------------------
@@ -1960,18 +2485,35 @@ summary:focus-visible,
     }
   });
 
-  els.toolBackBtn.addEventListener("click", () => navigate("tools"));
+  els.toolBackBtn.addEventListener("click", () => navigate("chat"));
 
   /* ---------------------------------------------------------
      History screen
      --------------------------------------------------------- */
 
   function renderHistoryList() {
-    const list = loadHistory();
-    els.historyList.innerHTML = "";
-    els.historyEmptyHint.hidden = list.length > 0;
+    els.historyFilterAll.classList.toggle("is-active", historyState.filter === "all");
+    els.historyFilterSaved.classList.toggle("is-active", historyState.filter === "saved");
 
-    list.forEach((chat) => {
+    const list = loadHistory();
+    const query = historyState.query.trim().toLowerCase();
+
+    const filtered = list.filter((chat) => {
+      if (historyState.filter === "saved" && !chat.pinned) return false;
+      if (query && !(chat.title || "").toLowerCase().includes(query)) return false;
+      return true;
+    });
+
+    els.historyList.innerHTML = "";
+    els.historyEmptyHint.hidden = filtered.length > 0;
+    els.historyEmptyHint.textContent =
+      query && filtered.length === 0
+        ? "No chats match your search."
+        : historyState.filter === "saved"
+        ? "No saved chats yet."
+        : "No saved chats yet.";
+
+    filtered.forEach((chat) => {
       const item = document.createElement("div");
       item.className = "history-item";
 
@@ -1983,6 +2525,12 @@ summary:focus-visible,
       `;
       main.addEventListener("click", () => openHistoryChat(chat.id));
 
+      const pin = document.createElement("button");
+      pin.className = "history-pin" + (chat.pinned ? " is-pinned" : "");
+      pin.setAttribute("aria-label", chat.pinned ? "Remove from saved chats" : "Save this chat");
+      pin.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="${chat.pinned ? "currentColor" : "none"}"><path d="M7 4h10a1 1 0 011 1v15l-6-3.5L6 20V5a1 1 0 011-1z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+      pin.addEventListener("click", () => togglePinChat(chat.id));
+
       const del = document.createElement("button");
       del.className = "history-delete";
       del.setAttribute("aria-label", "Delete chat");
@@ -1990,9 +2538,19 @@ summary:focus-visible,
       del.addEventListener("click", () => deleteHistoryChat(chat.id));
 
       item.appendChild(main);
+      item.appendChild(pin);
       item.appendChild(del);
       els.historyList.appendChild(item);
     });
+  }
+
+  function togglePinChat(id) {
+    const list = loadHistory();
+    const idx = list.findIndex((c) => c.id === id);
+    if (idx === -1) return;
+    list[idx] = { ...list[idx], pinned: !list[idx].pinned };
+    saveHistory(list);
+    renderHistoryList();
   }
 
   function openHistoryChat(id) {
@@ -2006,6 +2564,7 @@ summary:focus-visible,
 
     state.activeChatId = chat.id;
     state.chatMessages = chat.messages.slice();
+    clearPendingImage();
     renderChat();
     navigate("chat");
   }
@@ -2021,6 +2580,19 @@ summary:focus-visible,
     }
     renderHistoryList();
   }
+
+  els.historyFilterAll.addEventListener("click", () => {
+    historyState.filter = "all";
+    renderHistoryList();
+  });
+  els.historyFilterSaved.addEventListener("click", () => {
+    historyState.filter = "saved";
+    renderHistoryList();
+  });
+  els.historySearchInput.addEventListener("input", () => {
+    historyState.query = els.historySearchInput.value;
+    renderHistoryList();
+  });
 
   /* ---------------------------------------------------------
      Settings screen
@@ -2061,6 +2633,7 @@ summary:focus-visible,
      --------------------------------------------------------- */
 
   applyTheme();
+  renderSidebarTools();
   renderChat();
   navigate("chat");
 })();
