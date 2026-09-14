@@ -152,6 +152,14 @@ export async function POST(request) {
     temperature: 0.8,
     max_tokens: 1024,
     stream: true,
+    // Some models (including the vision model) emit their chain-of-thought
+    // as visible <think>...</think> text by default — "hidden" strips that
+    // so only the final answer is ever streamed to the user.
+    reasoning_format: "hidden",
+    // The vision model defaults to "thinking mode", which produces long,
+    // slow, essay-length answers even for simple image questions. Force
+    // its efficient non-thinking dialogue mode instead.
+    ...(usingVision ? { reasoning_effort: "none" } : {}),
   };
 
   const controller = new AbortController();
@@ -199,6 +207,45 @@ export async function POST(request) {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
+  // Safety net: strip any <think>...</think> block that slips through
+  // even with reasoning_format: "hidden" (e.g. a future model change).
+  // Handles the tags arriving split across multiple stream chunks.
+  let thinkTail = "";
+  let insideThink = false;
+  function filterThinking(text) {
+    thinkTail += text;
+    let output = "";
+    while (true) {
+      if (!insideThink) {
+        const openIdx = thinkTail.indexOf("<think>");
+        if (openIdx === -1) {
+          const safeLen = Math.max(0, thinkTail.length - 6);
+          output += thinkTail.slice(0, safeLen);
+          thinkTail = thinkTail.slice(safeLen);
+          break;
+        }
+        output += thinkTail.slice(0, openIdx);
+        thinkTail = thinkTail.slice(openIdx + 7);
+        insideThink = true;
+      } else {
+        const closeIdx = thinkTail.indexOf("</think>");
+        if (closeIdx === -1) {
+          const safeLen = Math.max(0, thinkTail.length - 7);
+          thinkTail = thinkTail.slice(safeLen);
+          break;
+        }
+        thinkTail = thinkTail.slice(closeIdx + 8);
+        insideThink = false;
+      }
+    }
+    return output;
+  }
+  function flushThinking() {
+    const out = insideThink ? "" : thinkTail;
+    thinkTail = "";
+    return out;
+  }
+
   // Re-package Groq's SSE stream ("data: {...}\n\n" lines) into plain
   // text token chunks, so the browser can just read and append text
   // without needing to know anything about the SSE/OpenAI format.
@@ -226,7 +273,8 @@ export async function POST(request) {
               const json = JSON.parse(dataStr);
               const delta = json.choices && json.choices[0] && json.choices[0].delta && json.choices[0].delta.content;
               if (delta) {
-                streamController.enqueue(encoder.encode(delta));
+                const visible = filterThinking(delta);
+                if (visible) streamController.enqueue(encoder.encode(visible));
               }
             } catch {
               /* ignore a malformed SSE chunk and keep reading */
@@ -236,6 +284,8 @@ export async function POST(request) {
       } catch (err) {
         console.error("Error while streaming Groq response:", err);
       } finally {
+        const remaining = flushThinking();
+        if (remaining) streamController.enqueue(encoder.encode(remaining));
         clearTimeout(timeoutId);
         streamController.close();
       }
