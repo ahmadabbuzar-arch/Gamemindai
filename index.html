@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -490,8 +491,16 @@ button:focus, a:focus, [role="button"]:focus, summary:focus, textarea:focus, inp
 .bubble-row.user { justify-content: flex-end; }
 .bubble-row.ai { justify-content: flex-start; }
 
-.bubble {
+.bubble-col {
+  display: flex;
+  flex-direction: column;
   max-width: 84%;
+}
+.bubble-row.user .bubble-col { align-items: flex-end; }
+.bubble-row.ai .bubble-col { align-items: flex-start; }
+
+.bubble {
+  max-width: 100%;
   padding: 12px 15px;
   border-radius: var(--radius-lg);
   font-size: 16px;
@@ -514,6 +523,31 @@ button:focus, a:focus, [role="button"]:focus, summary:focus, textarea:focus, inp
   margin-bottom: 8px;
   object-fit: cover;
 }
+
+.message-actions {
+  display: flex;
+  gap: 2px;
+  margin-top: 6px;
+  padding-left: 2px;
+  animation: pop var(--dur-base) var(--ease-out) both;
+}
+
+.message-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+}
+.message-action-btn:hover { background: var(--bg-elevated); color: var(--text-muted); }
+.message-action-btn:active { transform: scale(0.96); }
+.message-action-btn svg { flex-shrink: 0; }
 
 @keyframes pop {
   from { opacity: 0; transform: translateY(8px); }
@@ -2000,7 +2034,7 @@ summary:focus-visible,
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("https://gamemindai.vercel.app/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages, system, image: image || undefined }),
@@ -2082,6 +2116,10 @@ summary:focus-visible,
   function renderBubble(msg) {
     const row = document.createElement("div");
     row.className = "bubble-row " + (msg.role === "user" ? "user" : "ai");
+
+    const col = document.createElement("div");
+    col.className = "bubble-col";
+
     const bubble = document.createElement("div");
     bubble.className = "bubble " + (msg.role === "user" ? "bubble-user" : "bubble-ai");
 
@@ -2098,8 +2136,55 @@ summary:focus-visible,
     textEl.textContent = msg.content || "";
     bubble.appendChild(textEl);
 
-    row.appendChild(bubble);
+    col.appendChild(bubble);
+
+    // Only completed assistant messages get action buttons — the
+    // message currently streaming in gets them appended once it's done.
+    if (msg.role === "assistant" && msg.content) {
+      col.appendChild(renderMessageActions(() => msg.content));
+    }
+
+    row.appendChild(col);
     return row;
+  }
+
+  function renderMessageActions(getText) {
+    const actions = document.createElement("div");
+    actions.className = "message-actions";
+
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.className = "message-action-btn";
+    copyBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M5 15V6a2 2 0 012-2h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span>Copy</span>`;
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(getText());
+        const label = copyBtn.querySelector("span");
+        const original = label.textContent;
+        label.textContent = "Copied";
+        setTimeout(() => (label.textContent = original), 1400);
+      } catch {
+        /* clipboard unavailable — silently ignore */
+      }
+    });
+    actions.appendChild(copyBtn);
+
+    if (typeof navigator.share === "function") {
+      const shareBtn = document.createElement("button");
+      shareBtn.type = "button";
+      shareBtn.className = "message-action-btn";
+      shareBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 3v12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M8 7l4-4 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Share</span>`;
+      shareBtn.addEventListener("click", async () => {
+        try {
+          await navigator.share({ text: getText() });
+        } catch {
+          /* user cancelled the share sheet, or sharing failed — ignore */
+        }
+      });
+      actions.appendChild(shareBtn);
+    }
+
+    return actions;
   }
 
   const prefersReducedMotion =
@@ -2164,6 +2249,7 @@ summary:focus-visible,
 
     const assistantMsg = { role: "assistant", content: "" };
     let bubbleTextEl = null;
+    let bubbleCol = null;
     let started = false;
 
     const handleChunk = (chunk) => {
@@ -2172,6 +2258,7 @@ summary:focus-visible,
         els.typingRow.hidden = true;
         state.chatMessages.push(assistantMsg);
         const row = renderBubble(assistantMsg);
+        bubbleCol = row.querySelector(".bubble-col");
         bubbleTextEl = row.querySelector(".bubble-text");
         els.messagesEl.appendChild(row);
       }
@@ -2185,6 +2272,7 @@ summary:focus-visible,
       await streamChatApi(buildApiMessages(state.chatMessages), GENERAL_SYSTEM_PROMPT, handleChunk, apiImage);
       state.lastFailedSend = null;
       upsertCurrentChatToHistory();
+      if (bubbleCol) bubbleCol.appendChild(renderMessageActions(() => assistantMsg.content));
     } catch (err) {
       state.lastFailedSend = { text: trimmed, image };
       if (started) {
@@ -2205,7 +2293,8 @@ summary:focus-visible,
     "Answer directly: no greetings, no restating the question, no unnecessary setup. Give the answer first, then extra detail only if it's genuinely useful. " +
     "Keep it concise — usually 2 to 6 short paragraphs or a few concise bullet points. Give short answers for simple questions. Do not produce long articles or over-explain; go into detail only when the user clearly asks for it. " +
     "Only ask a follow-up question when you truly need more information; otherwise just answer. No emojis. " +
-    "When an image is attached, describe or answer about it directly, read any visible text (OCR), and analyze screenshots, UI/app designs, error messages, diagrams, or Minecraft builds and gameplay as needed. If the image is blurry, cropped, or a detail isn't clearly visible, say so plainly instead of guessing — never invent details you can't actually see.";
+    "When an image is attached, describe or answer about it directly, read any visible text (OCR), and analyze screenshots, UI/app designs, error messages, diagrams, or Minecraft builds and gameplay as needed. If the image is blurry, cropped, or a detail isn't clearly visible, say so plainly instead of guessing — never invent details you can't actually see. " +
+    "Keep image answers just as short as text answers — a couple of sentences or a short list is usually enough. Only give a long, detailed breakdown when the user explicitly asks for one (e.g. \"describe this in detail\" or \"give me a full analysis\").";
 
   els.composerForm.addEventListener("submit", (e) => {
     e.preventDefault();
