@@ -7,6 +7,15 @@
 const EASYVOICE_API_URL = "https://easyvoice.ae/api/v1/audio/speech";
 const EASYVOICE_MODEL = "kokoro-82m";
 const EASYVOICE_VOICE = process.env.EASYVOICE_VOICE || "af_aoede";
+// Kokoro's Hindi voices — used only when the reply is in Hindi/Hinglish, so
+// pronunciation doesn't sound like an English voice sounding out Hindi words.
+const EASYVOICE_VOICE_HI = process.env.EASYVOICE_VOICE_HI || "hf_alpha";
+
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+// Fast, cheap model used only to transliterate romanized Hindi/Hinglish
+// into Devanagari before sending it to the Hindi voice — Kokoro's Hindi
+// phonemizer expects Devanagari script, not Roman letters.
+const GROQ_TRANSLITERATE_MODEL = "openai/gpt-oss-20b";
 
 const UPSTREAM_TIMEOUT_MS = 30000;
 const MAX_TEXT_LENGTH = 4500; // stays safely under EasyVoice's free-tier per-request/day limits
@@ -28,6 +37,61 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
+// Very common Hinglish (Roman-script Hindi) words — used only to decide
+// whether text needs the Hindi voice + Devanagari transliteration.
+const HINGLISH_MARKERS = new Set([
+  "hai", "hain", "nahi", "nahin", "kya", "kaise", "kaisa", "kaisi", "kyun", "kyu",
+  "aap", "tum", "tumhe", "aapko", "mujhe", "hum", "humein", "unko", "unka",
+  "mein", "main", "hoga", "hogi", "raha", "rahi", "rahe", "karo", "kare", "karna",
+  "wala", "wali", "bhi", "abhi", "acha", "accha", "theek", "thik", "sahi",
+  "bata", "batao", "dekho", "suno", "chalo", "matlab", "bahut", "bohot", "kuch",
+]);
+
+function looksHinglishOrHindi(text) {
+  if (/[\u0900-\u097F]/.test(text)) return true; // already Devanagari
+  const words = text.toLowerCase().match(/[a-z]+/g) || [];
+  if (words.length === 0) return false;
+  const hits = words.filter((w) => HINGLISH_MARKERS.has(w)).length;
+  return hits / words.length > 0.12;
+}
+
+async function transliterateToDevanagari(text, groqApiKey) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  try {
+    const res = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${groqApiKey}`,
+      },
+      body: JSON.stringify({
+        model: GROQ_TRANSLITERATE_MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Transliterate the given text into Devanagari script for text-to-speech. Convert Hindi/Hinglish words (however they're spelled in Roman letters) into correct Devanagari. Keep genuine English words, brand names, and numbers as-is in Roman script if that's how they'd naturally be read aloud. Output ONLY the transliterated text, nothing else — no explanation, no quotes.",
+          },
+          { role: "user", content: text },
+        ],
+        temperature: 0.2,
+        max_tokens: 1500,
+        stream: false,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) return text; // fall back to the original text on any failure
+    const data = await res.json();
+    const out = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    return typeof out === "string" && out.trim() ? out.trim() : text;
+  } catch {
+    clearTimeout(timeoutId);
+    return text; // never block voice generation on this step failing
+  }
+}
+
 export async function POST(request) {
   const apiKey = process.env.EASYVOICE_API_KEY;
   if (!apiKey) {
@@ -46,7 +110,17 @@ export async function POST(request) {
   if (typeof text !== "string" || !text.trim()) {
     return jsonError("No text provided to speak.", 400);
   }
-  const cleanText = text.trim().slice(0, MAX_TEXT_LENGTH);
+  let cleanText = text.trim().slice(0, MAX_TEXT_LENGTH);
+
+  // If the reply is in Hindi/Hinglish, transliterate to Devanagari and use
+  // a Hindi voice so pronunciation is natural instead of an English voice
+  // sounding out Hindi words letter-by-letter.
+  let voice = EASYVOICE_VOICE;
+  const groqApiKey = process.env.GROQ_API_KEY;
+  if (looksHinglishOrHindi(cleanText) && groqApiKey) {
+    cleanText = await transliterateToDevanagari(cleanText, groqApiKey);
+    voice = EASYVOICE_VOICE_HI;
+  }
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
@@ -62,7 +136,7 @@ export async function POST(request) {
       body: JSON.stringify({
         model: EASYVOICE_MODEL,
         input: cleanText,
-        voice: EASYVOICE_VOICE,
+        voice,
         response_format: "mp3",
       }),
       signal: controller.signal,
