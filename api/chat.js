@@ -13,8 +13,13 @@
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-// Change this to swap models without touching any other code.
-const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+// groq/compound is Groq's agentic "system" model: it behaves like a
+// normal chat model but automatically decides when to use built-in
+// tools (live web search, visiting websites, code execution, Wolfram
+// Alpha) with zero extra setup — this is what gives GameMind AI real
+// web-search / up-to-date-info capability using only the existing
+// GROQ_API_KEY. Change this to swap models without touching other code.
+const GROQ_MODEL = process.env.GROQ_MODEL || "groq/compound";
 
 // Vision-capable model, used only for messages that include an image.
 // Groq's vision lineup changes more often than its text lineup — check
@@ -144,22 +149,32 @@ export async function POST(request) {
   const systemPrompt =
     typeof system === "string" && system.trim()
       ? system.trim().slice(0, 2000)
-      : "You are GameMind AI, a friendly, natural-sounding general-purpose AI assistant built by Sarim (Sarim Production), with strong gaming expertise. If asked who made you or for a contact email, say Sarim (Sarim Production) and sarimforbusiness@gmail.com — never invent other names or emails. If the user writes in Hindi or Hinglish, reply in casual everyday spoken Hindi/Hinglish (like texting a friend), never shuddh/literary Hindi. Answer directly and briefly — usually 2 to 6 short paragraphs or a few bullet points, no long articles unless the user asks for detail. No emojis.";
+      : "You are GameMind AI, a friendly, natural-sounding general-purpose AI assistant built by Sarim (Sarim Production), with strong gaming expertise and real live web search built in — use it when needed, don't claim you can't search. If asked who made you or for a contact email, say Sarim (Sarim Production) and sarimforbusiness@gmail.com — never invent other names or emails. If the user writes in Hindi or Hinglish, reply in casual everyday spoken Hindi/Hinglish (like texting a friend), never shuddh/literary Hindi. Answer directly and briefly — usually 2 to 6 short paragraphs or a few bullet points, no long articles unless the user asks for detail. No emojis.";
 
   const payload = {
     model: usingVision ? GROQ_VISION_MODEL : GROQ_MODEL,
     messages: [{ role: "system", content: systemPrompt }, ...finalMessages],
     temperature: 0.8,
-    max_tokens: 1024,
+    // groq/compound's tool-use round-trips (web search, code execution)
+    // consume extra tokens internally, so it gets more headroom than a
+    // plain text/vision reply needs.
+    max_tokens: usingVision ? 1024 : 2048,
     stream: true,
-    // Some models (including the vision model) emit their chain-of-thought
-    // as visible <think>...</think> text by default — "hidden" strips that
-    // so only the final answer is ever streamed to the user.
-    reasoning_format: "hidden",
-    // The vision model defaults to "thinking mode", which produces long,
-    // slow, essay-length answers even for simple image questions. Force
-    // its efficient non-thinking dialogue mode instead.
-    ...(usingVision ? { reasoning_effort: "none" } : {}),
+    // Only the vision model needs these — groq/compound is an agentic
+    // "system", not a plain reasoning model, and may reject params it
+    // doesn't recognize, so they're scoped to the vision path only.
+    ...(usingVision
+      ? {
+          // Some models emit their chain-of-thought as visible
+          // <think>...</think> text by default — "hidden" strips that
+          // so only the final answer is ever streamed to the user.
+          reasoning_format: "hidden",
+          // The vision model defaults to "thinking mode", which produces
+          // long, slow, essay-length answers even for simple image
+          // questions. Force its efficient non-thinking dialogue mode instead.
+          reasoning_effort: "none",
+        }
+      : {}),
   };
 
   const controller = new AbortController();
