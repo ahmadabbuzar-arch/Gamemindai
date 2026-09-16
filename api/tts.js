@@ -71,7 +71,7 @@ async function transliterateToDevanagari(text, groqApiKey) {
           {
             role: "system",
             content:
-              "Transliterate the given text into Devanagari script for text-to-speech. Convert Hindi/Hinglish words (however they're spelled in Roman letters) into correct Devanagari. Keep genuine English words, brand names, and numbers as-is in Roman script if that's how they'd naturally be read aloud. Output ONLY the transliterated text, nothing else — no explanation, no quotes.",
+              "Transliterate the ENTIRE given text into Devanagari script for text-to-speech — do not leave any words in Roman/Latin letters. Convert Hindi/Hinglish words (however they're spelled) into correct Devanagari, and also spell out any English words, brand names, or technical terms phonetically in Devanagari the way a Hindi speaker would naturally pronounce them while speaking Hindi (e.g. website → वेबसाइट, email → ईमेल). Numbers can stay as digits. The whole output must be one consistent script with no Roman-letter islands, so it reads smoothly instead of stopping at every script change. Output ONLY the transliterated text, nothing else — no explanation, no quotes.",
           },
           { role: "user", content: text },
         ],
