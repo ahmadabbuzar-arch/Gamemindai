@@ -1,33 +1,37 @@
 // api/generate-image.js
-// Vercel Function (Web/Fetch API handler signature) — secure proxy to the
-// Gemini image-generation API. The key is read only from
-// process.env.GEMINI_API_KEY and is never sent to, or exposed in, the
-// frontend. Plain REST calls are used — no SDK/npm install required.
+// Vercel Function (Web/Fetch API handler signature) — secure proxy to
+// Cloudflare Workers AI's image-generation REST API. Credentials are
+// read only from process.env.CLOUDFLARE_ACCOUNT_ID and
+// process.env.CLOUDFLARE_API_TOKEN, and are never sent to, or exposed
+// in, the frontend. Plain REST call — no SDK/npm install required.
 
-// gemini-2.5-flash-image is on Google's own deprecation schedule for
-// shutdown on October 2, 2026 (released Oct 2, 2025); Google's listed
-// recommended replacement is gemini-3.1-flash-image-preview, which is
-// what current image-generation docs default to. Check
-// https://ai.google.dev/gemini-api/docs/deprecations before assuming
-// this stays correct long-term — Google rotates image model IDs often.
-//
-// IMPORTANT: Gemini image-generation models have NO free tier — Google's
-// pricing page lists "Free Tier: not available" for every current image
-// model. The Google Cloud project behind GEMINI_API_KEY must have
-// billing enabled, or every request will fail with a quota/permission
-// error regardless of how little you use it.
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-flash-image-preview";
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const CLOUDFLARE_MODEL = "@cf/black-forest-labs/flux-1-schnell";
 
+// flux-1-schnell's documented input schema is just { prompt, steps } —
+// it has NO width/height/aspect_ratio/negative_prompt parameter. Sending
+// unsupported fields (e.g. width/height) causes Cloudflare to reject the
+// whole request, not just ignore the extra field. So aspect ratio, style,
+// and negative prompt are all folded into the prompt text instead, the
+// same way a person would type them.
 const UPSTREAM_TIMEOUT_MS = 45000; // image generation is slower than a text reply
-const MAX_PROMPT_LENGTH = 2000;
+const MAX_PROMPT_LENGTH = 2048; // Cloudflare's own documented cap for this model
 const MAX_NEGATIVE_PROMPT_LENGTH = 500;
+const DIFFUSION_STEPS = 4; // Cloudflare's own default for this model; max is 8
 
 const ALLOWED_ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"];
 
-// Short descriptor phrases folded into the prompt text — Gemini's image
-// model doesn't have a separate "style" API parameter, so style is
-// expressed the same way a person would type it.
+// flux-1-schnell has no aspect-ratio parameter, so this is expressed as a
+// plain-language composition hint appended to the prompt instead.
+const ASPECT_RATIO_HINTS = {
+  "1:1": "square 1:1 composition",
+  "16:9": "wide 16:9 landscape composition",
+  "9:16": "tall 9:16 vertical portrait composition",
+  "4:3": "4:3 landscape composition",
+  "3:4": "3:4 portrait composition",
+};
+
+// Short descriptor phrases folded into the prompt text — same approach
+// used for aspect ratio, since this model has no separate "style" param.
 const STYLE_DESCRIPTORS = {
   Realistic: "photorealistic, natural lighting, high detail",
   Cinematic: "cinematic lighting, dramatic composition, film still, wide dynamic range",
@@ -52,13 +56,15 @@ function jsonError(message, status) {
   });
 }
 
-// Strips anything that looks like the raw API key value out of an
-// upstream message before it's ever shown to the browser — defense in
-// depth in case Google ever echoes a key/header back in an error body.
-function sanitizeUpstreamMessage(message, apiKey) {
+// Strips the raw token/account id out of any upstream message before it
+// is ever shown to the browser — defense in depth in case Cloudflare
+// ever echoes a header value back in an error body.
+function sanitizeUpstreamMessage(message, ...secrets) {
   if (!message) return "";
   let safe = String(message);
-  if (apiKey) safe = safe.split(apiKey).join("[redacted]");
+  for (const secret of secrets) {
+    if (secret) safe = safe.split(secret).join("[redacted]");
+  }
   return safe.slice(0, 300);
 }
 
@@ -67,9 +73,11 @@ export async function OPTIONS() {
 }
 
 export async function POST(request) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.error("GEMINI_API_KEY is not set.");
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+
+  if (!accountId || !apiToken) {
+    console.error("CLOUDFLARE_ACCOUNT_ID and/or CLOUDFLARE_API_TOKEN is not set.");
     return jsonError("Image generation isn't configured yet. Please try again later.", 500);
   }
 
@@ -85,39 +93,43 @@ export async function POST(request) {
   if (typeof prompt !== "string" || !prompt.trim()) {
     return jsonError("Please enter a prompt to generate an image.", 400);
   }
-  const cleanPrompt = prompt.trim().slice(0, MAX_PROMPT_LENGTH);
 
   const cleanAspectRatio = ALLOWED_ASPECT_RATIOS.includes(aspectRatio) ? aspectRatio : "1:1";
+  const aspectHint = ASPECT_RATIO_HINTS[cleanAspectRatio];
 
   const cleanNegative =
     typeof negativePrompt === "string" ? negativePrompt.trim().slice(0, MAX_NEGATIVE_PROMPT_LENGTH) : "";
 
   const styleDescriptor = typeof style === "string" && STYLE_DESCRIPTORS[style] ? STYLE_DESCRIPTORS[style] : "";
 
-  let finalPrompt = cleanPrompt;
-  if (styleDescriptor) finalPrompt += `. Style: ${styleDescriptor}.`;
-  if (cleanNegative) finalPrompt += ` Do not include: ${cleanNegative}.`;
+  // Build the suffix first so the user's own prompt — the important
+  // part — is what gets truncated last if the combined text is too long.
+  let suffix = `. ${aspectHint}.`;
+  if (styleDescriptor) suffix += ` Style: ${styleDescriptor}.`;
+  if (cleanNegative) suffix += ` Do not include: ${cleanNegative}.`;
 
-  // Request structure and image-output handling preserved as-is —
-  // only the model id and error handling below have changed.
+  const cleanPrompt = prompt.trim().slice(0, Math.max(0, MAX_PROMPT_LENGTH - suffix.length));
+  const finalPrompt = (cleanPrompt + suffix).slice(0, MAX_PROMPT_LENGTH);
+
+  // Request structure: only "prompt" and "steps" are sent — this model
+  // does not accept width/height/aspect_ratio/negative_prompt fields.
   const payload = {
-    contents: [{ parts: [{ text: finalPrompt }] }],
-    generationConfig: {
-      responseModalities: ["IMAGE"],
-      imageConfig: { aspectRatio: cleanAspectRatio },
-    },
+    prompt: finalPrompt,
+    steps: DIFFUSION_STEPS,
   };
+
+  const CLOUDFLARE_API_URL = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${CLOUDFLARE_MODEL}`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
 
-  let geminiRes;
+  let cfRes;
   try {
-    geminiRes = await fetch(GEMINI_API_URL, {
+    cfRes = await fetch(CLOUDFLARE_API_URL, {
       method: "POST",
       headers: {
+        Authorization: `Bearer ${apiToken}`,
         "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
@@ -125,10 +137,10 @@ export async function POST(request) {
   } catch (err) {
     clearTimeout(timeoutId);
     if (err.name === "AbortError") {
-      console.error(`Gemini image request timed out. model=${GEMINI_MODEL}`);
+      console.error(`Cloudflare image request timed out. model=${CLOUDFLARE_MODEL}`);
       return jsonError("Image generation took too long. Please try again.", 504);
     }
-    console.error(`Unexpected error calling Gemini API. model=${GEMINI_MODEL}`, err);
+    console.error(`Unexpected error calling Cloudflare Workers AI. model=${CLOUDFLARE_MODEL}`, err);
     return jsonError("Couldn't reach the image service. Check your connection and try again.", 500);
   }
 
@@ -136,49 +148,54 @@ export async function POST(request) {
 
   let data = null;
   try {
-    data = await geminiRes.json();
+    data = await cfRes.json();
   } catch {
-    console.error(`Gemini returned an unreadable (non-JSON) response. model=${GEMINI_MODEL} status=${geminiRes.status}`);
+    console.error(
+      `Cloudflare returned an unreadable (non-JSON) response. model=${CLOUDFLARE_MODEL} status=${cfRes.status}`
+    );
     return jsonError("Received an unreadable response from the image service.", 502);
   }
 
-  if (!geminiRes.ok) {
-    const status = geminiRes.status;
-    const rawMessage = (data && data.error && data.error.message) || "";
-    const upstreamStatus = (data && data.error && data.error.status) || "";
-    const safeMessage = sanitizeUpstreamMessage(rawMessage, apiKey);
+  const cfErrors = Array.isArray(data && data.errors) ? data.errors : [];
+  const firstError = cfErrors[0];
+  const rawMessage = (firstError && firstError.message) || "";
+  const errorCode = firstError && firstError.code;
+  const safeMessage = sanitizeUpstreamMessage(rawMessage, apiToken, accountId);
 
-    // Safe server-side logging for debugging — never sent to the client.
+  // Cloudflare's /ai/run endpoint signals failure either via a non-2xx
+  // HTTP status or via `success: false` in an otherwise 200 response —
+  // check both rather than assuming only one applies.
+  if (!cfRes.ok || data.success === false) {
+    const status = cfRes.status;
+
     console.error(
-      `Gemini image API error. model=${GEMINI_MODEL} httpStatus=${status} upstreamStatus=${upstreamStatus} message=${rawMessage}`
+      `Cloudflare image API error. model=${CLOUDFLARE_MODEL} httpStatus=${status} errorCode=${errorCode || "none"} message=${rawMessage}`
     );
 
-    // 429 — rate limit or quota exceeded. Image models have no free
-    // tier, so this often means billing isn't enabled rather than a
-    // transient spike — say so rather than just "try again."
-    if (status === 429) {
-      return jsonError(
-        `Image generation quota or rate limit reached${safeMessage ? `: ${safeMessage}` : "."} ` +
-          "Gemini image models have no free tier — check that billing is enabled on your Google Cloud project, or wait and try again if you're already on a paid plan.",
-        429
-      );
-    }
-
-    // 401 / 403 — API key, permission, or billing problem.
+    // 401 / 403 — invalid token, wrong account id, or missing Workers AI
+    // permission on the token.
     if (status === 401 || status === 403) {
       return jsonError(
-        `The image service rejected the request (API key, permission, or billing issue)${
+        `The image service rejected the request (invalid credentials or missing permissions)${
           safeMessage ? `: ${safeMessage}` : "."
-        } Please check the Gemini API key and billing configuration.`,
+        } Please check CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.`,
         status
       );
     }
 
-    // 400 — invalid request or an unsupported/unknown model id.
+    // 429 — Workers AI daily/rate quota exceeded.
+    if (status === 429) {
+      return jsonError(
+        `Image generation quota or rate limit reached${safeMessage ? `: ${safeMessage}` : "."} ` +
+          "Please wait a moment and try again.",
+        429
+      );
+    }
+
+    // 400 — invalid request (bad prompt, unsupported field, etc.).
     if (status === 400) {
       return jsonError(
-        `The image request was invalid${safeMessage ? `: ${safeMessage}` : "."} ` +
-          "This can happen if the configured model name is no longer supported — try adjusting your prompt, or check the server's GEMINI_MODEL setting.",
+        `The image request was invalid${safeMessage ? `: ${safeMessage}` : "."} Try adjusting your prompt.`,
         400
       );
     }
@@ -191,34 +208,17 @@ export async function POST(request) {
     );
   }
 
-  // Content blocked for safety before any generation happened.
-  const blockReason = data && data.promptFeedback && data.promptFeedback.blockReason;
-  if (blockReason) {
-    console.error(`Gemini blocked the prompt before generation. model=${GEMINI_MODEL} blockReason=${blockReason}`);
-    return jsonError("That prompt was blocked by the safety filter. Please try a different description.", 422);
-  }
+  const base64 = data && data.result && data.result.image;
 
-  const candidate = data && data.candidates && data.candidates[0];
-  const finishReason = candidate && candidate.finishReason;
-  if (finishReason === "SAFETY" || finishReason === "PROHIBITED_CONTENT") {
-    console.error(`Gemini blocked the output. model=${GEMINI_MODEL} finishReason=${finishReason}`);
-    return jsonError("That request was blocked by the safety filter. Please try a different description.", 422);
-  }
-
-  const parts = candidate && candidate.content && candidate.content.parts;
-  const imagePart = Array.isArray(parts) ? parts.find((p) => p && p.inlineData && p.inlineData.data) : null;
-
-  if (!imagePart) {
+  if (!base64 || typeof base64 !== "string") {
     console.error(
-      `Gemini response had no image data. model=${GEMINI_MODEL} finishReason=${finishReason || "none"} body=${JSON.stringify(data).slice(0, 500)}`
+      `Cloudflare response had no image data. model=${CLOUDFLARE_MODEL} body=${JSON.stringify(data).slice(0, 500)}`
     );
     return jsonError("The AI didn't return an image. Please try rephrasing your prompt.", 502);
   }
 
-  const mimeType = imagePart.inlineData.mimeType || "image/png";
-  const base64 = imagePart.inlineData.data;
-
-  return new Response(JSON.stringify({ imageDataUrl: `data:${mimeType};base64,${base64}` }), {
+  // flux-1-schnell's documented output is a base64-encoded JPEG.
+  return new Response(JSON.stringify({ imageDataUrl: `data:image/jpeg;base64,${base64}` }), {
     status: 200,
     headers: { "Content-Type": "application/json; charset=utf-8", ...CORS_HEADERS },
   });
