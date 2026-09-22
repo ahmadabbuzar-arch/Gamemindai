@@ -1,8 +1,9 @@
 // api/chat.js
 // Vercel Function using the Web (Fetch API) handler signature — secure
-// proxy to the Groq API. The API key is read only from
-// process.env.GROQ_API_KEY and is never sent to, or exposed in, the
-// frontend.
+// proxy to Google Gemini (primary) with automatic fallback to Groq
+// (backup) if Gemini fails, hits a quota/rate limit, or errors. Keys are
+// read only from process.env.GEMINI_API_KEY / process.env.GROQ_API_KEY
+// and are never sent to, or exposed in, the frontend.
 //
 // Using the Web signature (export async function POST(request) with a
 // standard Response) is intentional: Vercel's classic Node.js
@@ -11,28 +12,40 @@
 // out of the box, so the reply appears token-by-token as it's
 // generated instead of popping in all at once.
 
+// ---- Gemini (PRIMARY) ----
+// gemini-2.5-flash was deprecated/shut down (per Google's own
+// deprecations page) — gemini-3.5-flash is the current GA Flash-tier
+// model as of this writing. Check
+// https://ai.google.dev/gemini-api/docs/models before assuming this
+// stays correct long-term; Google rotates Gemini model IDs often.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse`;
+
+// ---- Groq (FALLBACK) ----
+// IMPORTANT: this used to default to "groq/compound", Groq's agentic
+// tool-use "system". Groq deprecated compound/compound-mini and
+// scheduled them for full shutdown — which is exactly what was causing
+// requests (especially ones that triggered its web-search tool, e.g.
+// questions about current/outside topics) to silently fail or come back
+// empty. Reverted to a plain, currently-supported chat model with no
+// tool-use involved, which is far more reliable as a fallback. Verify
+// current model status at https://console.groq.com/docs/deprecations.
+const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+
+// Vision-capable Groq model, used as the vision fallback if Gemini's
+// (also multimodal) request fails. qwen/qwen3.6-27b was deprecated in
+// favor of qwen/qwen3.8-27b — check
+// https://console.groq.com/docs/vision for the current model.
+const GROQ_VISION_MODEL = process.env.GROQ_VISION_MODEL || "qwen/qwen3.8-27b";
+
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-
-// groq/compound is Groq's agentic "system" model: it behaves like a
-// normal chat model but automatically decides when to use built-in
-// tools (live web search, visiting websites, code execution, Wolfram
-// Alpha) with zero extra setup — this is what gives GameMind AI real
-// web-search / up-to-date-info capability using only the existing
-// GROQ_API_KEY. Change this to swap models without touching other code.
-const GROQ_MODEL = process.env.GROQ_MODEL || "groq/compound";
-
-// Vision-capable model, used only for messages that include an image.
-// Groq's vision lineup changes more often than its text lineup — check
-// https://console.groq.com/docs/vision for the current model before
-// depending on this long-term.
-const GROQ_VISION_MODEL = process.env.GROQ_VISION_MODEL || "qwen/qwen3.6-27b";
 
 const UPSTREAM_TIMEOUT_MS = 25000;
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LENGTH = 6000;
 
 const ALLOWED_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8MB decoded — well under Groq's 20MB request limit
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8MB decoded
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -56,10 +69,327 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
-export async function POST(request) {
+// ---- <think>...</think> stripping (Groq path only — some Groq models
+// emit visible chain-of-thought by default) ----
+function createThinkFilter() {
+  let thinkTail = "";
+  let insideThink = false;
+  return {
+    filter(text) {
+      thinkTail += text;
+      let output = "";
+      while (true) {
+        if (!insideThink) {
+          const openIdx = thinkTail.indexOf("<think>");
+          if (openIdx === -1) {
+            const safeLen = Math.max(0, thinkTail.length - 6);
+            output += thinkTail.slice(0, safeLen);
+            thinkTail = thinkTail.slice(safeLen);
+            break;
+          }
+          output += thinkTail.slice(0, openIdx);
+          thinkTail = thinkTail.slice(openIdx + 7);
+          insideThink = true;
+        } else {
+          const closeIdx = thinkTail.indexOf("</think>");
+          if (closeIdx === -1) {
+            const safeLen = Math.max(0, thinkTail.length - 7);
+            thinkTail = thinkTail.slice(safeLen);
+            break;
+          }
+          thinkTail = thinkTail.slice(closeIdx + 8);
+          insideThink = false;
+        }
+      }
+      return output;
+    },
+    flush() {
+      const out = insideThink ? "" : thinkTail;
+      thinkTail = "";
+      return out;
+    },
+  };
+}
+
+// Converts our OpenAI-style message list (used for Groq) into Gemini's
+// { role, parts } content format. Handles both plain string content and
+// the multipart [{type:"text"},{type:"image_url"}] shape used for the
+// vision turn.
+function toGeminiContents(finalMessages) {
+  return finalMessages.map((m) => {
+    const role = m.role === "assistant" ? "model" : "user";
+    if (Array.isArray(m.content)) {
+      const parts = [];
+      for (const part of m.content) {
+        if (part.type === "text") {
+          parts.push({ text: part.text || "" });
+        } else if (part.type === "image_url" && part.image_url && part.image_url.url) {
+          const match = /^data:([^;]+);base64,(.*)$/.exec(part.image_url.url);
+          if (match) parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+        }
+      }
+      return { role, parts: parts.length ? parts : [{ text: "" }] };
+    }
+    return { role, parts: [{ text: m.content || "" }] };
+  });
+}
+
+// ---- Attempt Gemini (primary) ----
+// Returns a ready-to-stream Response on success, or null on any failure
+// (after logging the real reason server-side) so the caller can fall
+// back to Groq.
+async function attemptGemini(finalMessages, systemPrompt, usingVision) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.error("GEMINI_API_KEY is not set — skipping Gemini, falling back to Groq.");
+    return null;
+  }
+
+  const contents = toGeminiContents(finalMessages);
+  const payload = {
+    contents,
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    generationConfig: {
+      temperature: 0.8,
+      maxOutputTokens: usingVision ? 1024 : 2048,
+    },
+  };
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+
+  let geminiRes;
+  try {
+    geminiRes = await fetch(GEMINI_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    console.error(`Gemini request failed (network/timeout). model=${GEMINI_MODEL}`, err && err.name, err && err.message);
+    return null;
+  }
+
+  if (!geminiRes.ok) {
+    clearTimeout(timeoutId);
+    let data = null;
+    try {
+      data = await geminiRes.json();
+    } catch {
+      /* upstream error body wasn't valid JSON */
+    }
+    const upstreamMessage = (Array.isArray(data) ? data[0] : data)?.error?.message || "";
+    // Log the REAL upstream status/reason — never hidden, never shown
+    // to the client, but always visible in server logs for debugging.
+    console.error(`Gemini API error. model=${GEMINI_MODEL} status=${geminiRes.status} message=${upstreamMessage}`);
+    return null; // fall back to Groq
+  }
+
+  if (!geminiRes.body) {
+    clearTimeout(timeoutId);
+    console.error(`Gemini response had no body. model=${GEMINI_MODEL}`);
+    return null;
+  }
+
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  let receivedAny = false;
+
+  const stream = new ReadableStream({
+    async start(streamController) {
+      const reader = geminiRes.body.getReader();
+      let buffer = "";
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine.startsWith("data:")) continue;
+            const dataStr = trimmedLine.slice(5).trim();
+            if (!dataStr) continue;
+
+            try {
+              const json = JSON.parse(dataStr);
+              const candidate = json.candidates && json.candidates[0];
+              const parts = candidate && candidate.content && candidate.content.parts;
+              if (Array.isArray(parts)) {
+                const text = parts.map((p) => (p && typeof p.text === "string" ? p.text : "")).join("");
+                if (text) {
+                  receivedAny = true;
+                  streamController.enqueue(encoder.encode(text));
+                }
+              }
+            } catch {
+              /* ignore a malformed SSE chunk and keep reading */
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`Error while streaming Gemini response. model=${GEMINI_MODEL}`, err);
+      } finally {
+        clearTimeout(timeoutId);
+        if (!receivedAny) {
+          console.error(`Gemini stream completed with no content. model=${GEMINI_MODEL}`);
+        }
+        streamController.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      ...CORS_HEADERS,
+    },
+  });
+}
+
+// ---- Attempt Groq (fallback) ----
+// Returns a ready-to-stream Response on success, or null on failure
+// (after logging the real reason) so the caller can return a final,
+// clear error to the client.
+async function attemptGroq(finalMessages, systemPrompt, usingVision) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    console.error("GROQ_API_KEY is not set.");
+    console.error("GROQ_API_KEY is not set — no fallback available.");
+    return null;
+  }
+
+  const payload = {
+    model: usingVision ? GROQ_VISION_MODEL : GROQ_MODEL,
+    messages: [{ role: "system", content: systemPrompt }, ...finalMessages],
+    temperature: 0.8,
+    max_tokens: usingVision ? 1024 : 2048,
+    stream: true,
+    // Strip visible chain-of-thought and disable "thinking mode" — both
+    // qwen vision and gpt-oss support this; scoped narrowly since not
+    // every model recognizes these fields.
+    reasoning_format: "hidden",
+    ...(usingVision ? { reasoning_effort: "none" } : {}),
+  };
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+
+  let groqRes;
+  try {
+    groqRes = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    console.error(`Groq request failed (network/timeout). model=${payload.model}`, err && err.name, err && err.message);
+    return null;
+  }
+
+  if (!groqRes.ok) {
+    clearTimeout(timeoutId);
+    let data = null;
+    try {
+      data = await groqRes.json();
+    } catch {
+      /* upstream error body wasn't valid JSON */
+    }
+    const upstreamMessage = (data && data.error && data.error.message) || "";
+    console.error(`Groq API error. model=${payload.model} status=${groqRes.status} message=${upstreamMessage}`);
+    return null;
+  }
+
+  if (!groqRes.body) {
+    clearTimeout(timeoutId);
+    console.error(`Groq response had no body. model=${payload.model}`);
+    return null;
+  }
+
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const thinkFilter = createThinkFilter();
+  let receivedAny = false;
+
+  const stream = new ReadableStream({
+    async start(streamController) {
+      const reader = groqRes.body.getReader();
+      let buffer = "";
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine.startsWith("data:")) continue;
+            const dataStr = trimmedLine.slice(5).trim();
+            if (!dataStr || dataStr === "[DONE]") continue;
+
+            try {
+              const json = JSON.parse(dataStr);
+              const delta = json.choices && json.choices[0] && json.choices[0].delta && json.choices[0].delta.content;
+              if (delta) {
+                const visible = thinkFilter.filter(delta);
+                if (visible) {
+                  receivedAny = true;
+                  streamController.enqueue(encoder.encode(visible));
+                }
+              }
+            } catch {
+              /* ignore a malformed SSE chunk and keep reading */
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`Error while streaming Groq response. model=${payload.model}`, err);
+      } finally {
+        const remaining = thinkFilter.flush();
+        if (remaining) {
+          receivedAny = true;
+          streamController.enqueue(encoder.encode(remaining));
+        }
+        clearTimeout(timeoutId);
+        if (!receivedAny) {
+          console.error(`Groq stream completed with no content. model=${payload.model}`);
+        }
+        streamController.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      ...CORS_HEADERS,
+    },
+  });
+}
+
+export async function POST(request) {
+  if (!process.env.GEMINI_API_KEY && !process.env.GROQ_API_KEY) {
+    console.error("Neither GEMINI_API_KEY nor GROQ_API_KEY is set.");
     return jsonError("The server isn't configured yet. Please try again later.", 500);
   }
 
@@ -149,170 +479,18 @@ export async function POST(request) {
   const systemPrompt =
     typeof system === "string" && system.trim()
       ? system.trim().slice(0, 2000)
-      : "You are GameMind AI, a friendly, natural-sounding general-purpose AI assistant built by Sarim (Sarim Production), with strong gaming expertise and real live web search built in — use it when needed, don't claim you can't search. If asked who made you or for a contact email, say Sarim (Sarim Production) and sarimforbusiness@gmail.com — never invent other names or emails. If the user writes in Hindi or Hinglish, reply in casual everyday spoken Hindi/Hinglish (like texting a friend), never shuddh/literary Hindi. Answer directly and briefly — usually 2 to 6 short paragraphs or a few bullet points, no long articles unless the user asks for detail. No emojis.";
+      : "You are GameMind AI, a friendly, natural-sounding general-purpose AI assistant built by Sarim (Sarim Production), with strong gaming expertise. If asked who made you or for a contact email, say Sarim (Sarim Production) and sarimforbusiness@gmail.com — never invent other names or emails. If the user writes in Hindi or Hinglish, reply in casual everyday spoken Hindi/Hinglish (like texting a friend), never shuddh/literary Hindi. Answer directly and briefly — usually 2 to 6 short paragraphs or a few bullet points, no long articles unless the user asks for detail. No emojis.";
 
-  const payload = {
-    model: usingVision ? GROQ_VISION_MODEL : GROQ_MODEL,
-    messages: [{ role: "system", content: systemPrompt }, ...finalMessages],
-    temperature: 0.8,
-    // groq/compound's tool-use round-trips (web search, code execution)
-    // consume extra tokens internally, so it gets more headroom than a
-    // plain text/vision reply needs.
-    max_tokens: usingVision ? 1024 : 2048,
-    stream: true,
-    // Only the vision model needs these — groq/compound is an agentic
-    // "system", not a plain reasoning model, and may reject params it
-    // doesn't recognize, so they're scoped to the vision path only.
-    ...(usingVision
-      ? {
-          // Some models emit their chain-of-thought as visible
-          // <think>...</think> text by default — "hidden" strips that
-          // so only the final answer is ever streamed to the user.
-          reasoning_format: "hidden",
-          // The vision model defaults to "thinking mode", which produces
-          // long, slow, essay-length answers even for simple image
-          // questions. Force its efficient non-thinking dialogue mode instead.
-          reasoning_effort: "none",
-        }
-      : {}),
-  };
+  // ---- PRIMARY: Gemini ----
+  const geminiResponse = await attemptGemini(finalMessages, systemPrompt, usingVision);
+  if (geminiResponse) return geminiResponse;
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+  // ---- FALLBACK: Groq ----
+  console.error("Falling back to Groq after Gemini failed.");
+  const groqResponse = await attemptGroq(finalMessages, systemPrompt, usingVision);
+  if (groqResponse) return groqResponse;
 
-  let groqRes;
-  try {
-    groqRes = await fetch(GROQ_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-  } catch (err) {
-    clearTimeout(timeoutId);
-    if (err.name === "AbortError") {
-      return jsonError("The AI service took too long to respond. Please try again.", 504);
-    }
-    console.error("Unexpected error calling Groq API:", err);
-    return jsonError("Something went wrong on our end. Please try again.", 500);
-  }
-
-  if (!groqRes.ok) {
-    clearTimeout(timeoutId);
-    let data = null;
-    try {
-      data = await groqRes.json();
-    } catch {
-      /* upstream error body wasn't valid JSON — fall through to generic message */
-    }
-    const upstreamMessage =
-      data && data.error && data.error.message ? data.error.message : "The AI service returned an error.";
-    console.error("Groq API error:", groqRes.status, upstreamMessage);
-    return jsonError("GameMind AI couldn't get a response right now. Please try again.", 502);
-  }
-
-  if (!groqRes.body) {
-    clearTimeout(timeoutId);
-    return jsonError("GameMind AI couldn't get a response right now. Please try again.", 502);
-  }
-
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-
-  // Safety net: strip any <think>...</think> block that slips through
-  // even with reasoning_format: "hidden" (e.g. a future model change).
-  // Handles the tags arriving split across multiple stream chunks.
-  let thinkTail = "";
-  let insideThink = false;
-  function filterThinking(text) {
-    thinkTail += text;
-    let output = "";
-    while (true) {
-      if (!insideThink) {
-        const openIdx = thinkTail.indexOf("<think>");
-        if (openIdx === -1) {
-          const safeLen = Math.max(0, thinkTail.length - 6);
-          output += thinkTail.slice(0, safeLen);
-          thinkTail = thinkTail.slice(safeLen);
-          break;
-        }
-        output += thinkTail.slice(0, openIdx);
-        thinkTail = thinkTail.slice(openIdx + 7);
-        insideThink = true;
-      } else {
-        const closeIdx = thinkTail.indexOf("</think>");
-        if (closeIdx === -1) {
-          const safeLen = Math.max(0, thinkTail.length - 7);
-          thinkTail = thinkTail.slice(safeLen);
-          break;
-        }
-        thinkTail = thinkTail.slice(closeIdx + 8);
-        insideThink = false;
-      }
-    }
-    return output;
-  }
-  function flushThinking() {
-    const out = insideThink ? "" : thinkTail;
-    thinkTail = "";
-    return out;
-  }
-
-  // Re-package Groq's SSE stream ("data: {...}\n\n" lines) into plain
-  // text token chunks, so the browser can just read and append text
-  // without needing to know anything about the SSE/OpenAI format.
-  const stream = new ReadableStream({
-    async start(streamController) {
-      const reader = groqRes.body.getReader();
-      let buffer = "";
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine.startsWith("data:")) continue;
-            const dataStr = trimmedLine.slice(5).trim();
-            if (!dataStr || dataStr === "[DONE]") continue;
-
-            try {
-              const json = JSON.parse(dataStr);
-              const delta = json.choices && json.choices[0] && json.choices[0].delta && json.choices[0].delta.content;
-              if (delta) {
-                const visible = filterThinking(delta);
-                if (visible) streamController.enqueue(encoder.encode(visible));
-              }
-            } catch {
-              /* ignore a malformed SSE chunk and keep reading */
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Error while streaming Groq response:", err);
-      } finally {
-        const remaining = flushThinking();
-        if (remaining) streamController.enqueue(encoder.encode(remaining));
-        clearTimeout(timeoutId);
-        streamController.close();
-      }
-    },
-  });
-
-  return new Response(stream, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      ...CORS_HEADERS,
-    },
-  });
+  // ---- Both providers failed ----
+  console.error("Both Gemini and Groq failed for this request.");
+  return jsonError("GameMind AI couldn't get a response from any AI provider right now. Please try again in a moment.", 502);
 }
