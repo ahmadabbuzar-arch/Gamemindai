@@ -156,7 +156,14 @@ async function attemptGemini(finalMessages, systemPrompt, usingVision) {
     systemInstruction: { parts: [{ text: systemPrompt }] },
     generationConfig: {
       temperature: 0.8,
-      maxOutputTokens: usingVision ? 1024 : 2048,
+      // Was 2048 — a full single-file website (HTML + inline <style> +
+      // inline <script>, meta tags, Open Graph, etc.) routinely runs
+      // past that, so the reply got cut off mid-file, the closing ```
+      // fence never arrived, and the file-card conversion (which needs
+      // a *closed* fence) never triggered — the user just saw a raw,
+      // half-finished code dump forever. Raised well above what a
+      // normal single-page site needs.
+      maxOutputTokens: usingVision ? 1024 : 8000,
     },
   };
 
@@ -277,7 +284,10 @@ async function attemptGroq(finalMessages, systemPrompt, usingVision) {
     model: usingVision ? GROQ_VISION_MODEL : GROQ_MODEL,
     messages: [{ role: "system", content: systemPrompt }, ...finalMessages],
     temperature: 0.8,
-    max_tokens: usingVision ? 1024 : 2048,
+    // Was 2048 — same reason as the Gemini side above: a full
+    // single-file website file was getting truncated before its
+    // closing ``` fence, so it never became a downloadable file card.
+    max_tokens: usingVision ? 1024 : 8000,
     stream: true,
     // Strip visible chain-of-thought and disable "thinking mode" — both
     // qwen vision and gpt-oss support this; scoped narrowly since not
