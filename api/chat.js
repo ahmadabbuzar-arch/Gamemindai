@@ -481,9 +481,17 @@ export async function POST(request) {
       ]
     : cleanedMessages;
 
+  // NOTE: this cap used to be 2000 chars, which silently truncated the
+  // client's real GENERAL_SYSTEM_PROMPT (~3650 chars) — cutting off its
+  // LAST paragraph, which happens to be the file-generation formatting
+  // instructions. The model never saw them, so it never named files
+  // correctly. Raised well above the current prompt length, with
+  // headroom for it to grow, while still guarding against an
+  // arbitrarily huge value from a malicious client.
+  const SYSTEM_PROMPT_MAX_LENGTH = 8000;
   const systemPrompt =
     typeof system === "string" && system.trim()
-      ? system.trim().slice(0, 2000)
+      ? system.trim().slice(0, SYSTEM_PROMPT_MAX_LENGTH)
       : "You are GameMind AI, a friendly, natural-sounding general-purpose AI assistant built by Sarim (Sarim Production), with strong gaming expertise. If asked who made you or for a contact email, say Sarim (Sarim Production) and sarimforbusiness@gmail.com — never invent other names or emails. If the user writes in Hindi or Hinglish, reply in casual everyday spoken Hindi/Hinglish (like texting a friend), never shuddh/literary Hindi. Answer directly and briefly — usually 2 to 6 short paragraphs or a few bullet points, no long articles unless the user asks for detail. No emojis.";
 
   // ---- PRIMARY: Groq (fast) ----
