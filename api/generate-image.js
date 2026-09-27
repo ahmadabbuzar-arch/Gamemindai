@@ -5,13 +5,41 @@
 // process.env.CLOUDFLARE_API_TOKEN, and are never sent to, or exposed
 // in, the frontend. Plain REST calls — no SDK/npm install required.
 
-// Text-to-image (no source image attached): flux-1-schnell — fast, JSON
-// request body, but its input schema is ONLY { prompt, steps }. It has
-// no width/height/aspect_ratio/negative_prompt parameter, and sending
-// those extra fields causes Cloudflare to reject the whole request. So
-// aspect ratio, style, and negative prompt are all folded into the
-// prompt text instead, the same way a person would type them.
-const CLOUDFLARE_GENERATE_MODEL = "@cf/black-forest-labs/flux-1-schnell";
+// Text-to-image (no source image attached): stable-diffusion-xl-base-1.0.
+// ROOT CAUSE OF THE "always square" BUG: this used to be
+// flux-1-schnell, whose input schema is ONLY { prompt, steps } — it has
+// no width/height/aspect_ratio parameter at all. Every request was
+// silently generated at Flux's default square resolution no matter what
+// aspect ratio the UI sent, because there was nowhere to actually pass
+// it to the provider — the old code could only fold a text hint like
+// "16:9 landscape composition" into the prompt, which influences
+// framing/composition but not the actual output dimensions. SDXL's
+// schema genuinely accepts width/height (256-2048px each) plus a real
+// negative_prompt field, so the selected ratio can now be sent as real
+// generation dimensions instead of just a prompt suggestion. Slower
+// ("Medium" vs Flux's "Fast" per Cloudflare's own model guide) but this
+// is what it takes to actually honor the selected aspect ratio.
+const CLOUDFLARE_GENERATE_MODEL = "@cf/stabilityai/stable-diffusion-xl-base-1.0";
+
+// SDXL's own required range is 256-2048px per side. Pairs below keep
+// each ratio close to SDXL's ~1024x1024 trained resolution (bucketed,
+// rounded to multiples of 8) rather than stretching/cropping after the
+// fact — this IS the aspect ratio at the generation stage, not a
+// post-hoc crop.
+const ASPECT_RATIO_DIMENSIONS = {
+  "1:1": { width: 1024, height: 1024 },
+  "16:9": { width: 1344, height: 768 },
+  "9:16": { width: 768, height: 1344 },
+  "4:3": { width: 1152, height: 896 },
+  "3:4": { width: 896, height: 1152 },
+  "4:5": { width: 912, height: 1144 },
+  "5:4": { width: 1144, height: 912 },
+};
+
+// SDXL's documented default/max is 20 — there's no lower "fast" tier
+// like Flux's 4-step schnell, so this is fixed rather than a tunable
+// speed/quality knob.
+const SDXL_NUM_STEPS = 20;
 
 // Image editing (a source image is attached): flux-2-klein-4b — this is
 // the current Cloudflare model that actually accepts an input image for
@@ -21,9 +49,8 @@ const CLOUDFLARE_GENERATE_MODEL = "@cf/black-forest-labs/flux-1-schnell";
 const CLOUDFLARE_EDIT_MODEL = "@cf/black-forest-labs/flux-2-klein-4b";
 
 const UPSTREAM_TIMEOUT_MS = 45000; // image generation is slower than a text reply
-const MAX_PROMPT_LENGTH = 2048; // Cloudflare's own documented cap for flux-1-schnell
+const MAX_PROMPT_LENGTH = 2048; // Conservative shared cap across the Cloudflare text-to-image models used here
 const MAX_NEGATIVE_PROMPT_LENGTH = 500;
-const DIFFUSION_STEPS = 4; // Cloudflare's own default for flux-1-schnell; max is 8
 const MAX_EDIT_IMAGE_BYTES = 3 * 1024 * 1024; // decoded size guard for the 512x512 input limit
 
 const ALLOWED_ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "4:5", "5:4"];
@@ -80,15 +107,19 @@ function sanitizeUpstreamMessage(message, ...secrets) {
   return safe.slice(0, 300);
 }
 
-function buildPromptSuffix(cleanAspectRatio, style, negativePrompt) {
+// Style has no dedicated API parameter on either Cloudflare model, so
+// it's still folded into the prompt text. Aspect ratio is now handled
+// for real via width/height (see ASPECT_RATIO_DIMENSIONS) — the text
+// hint stays only as an extra compositional nudge, not the mechanism
+// that controls output dimensions. Negative prompt is no longer folded
+// in here: SDXL has a real negative_prompt field (see below), so it's
+// sent as its own parameter instead of prompt text.
+function buildPromptSuffix(cleanAspectRatio, style) {
   const aspectHint = ASPECT_RATIO_HINTS[cleanAspectRatio];
-  const cleanNegative =
-    typeof negativePrompt === "string" ? negativePrompt.trim().slice(0, MAX_NEGATIVE_PROMPT_LENGTH) : "";
   const styleDescriptor = typeof style === "string" && STYLE_DESCRIPTORS[style] ? STYLE_DESCRIPTORS[style] : "";
 
   let suffix = aspectHint ? `. ${aspectHint}.` : "";
   if (styleDescriptor) suffix += ` Style: ${styleDescriptor}.`;
-  if (cleanNegative) suffix += ` Do not include: ${cleanNegative}.`;
   return suffix;
 }
 
@@ -165,9 +196,11 @@ export async function POST(request) {
   }
 
   const cleanAspectRatio = ALLOWED_ASPECT_RATIOS.includes(aspectRatio) ? aspectRatio : "1:1";
-  const suffix = buildPromptSuffix(cleanAspectRatio, style, negativePrompt);
+  const suffix = buildPromptSuffix(cleanAspectRatio, style);
   const cleanPrompt = prompt.trim().slice(0, Math.max(0, MAX_PROMPT_LENGTH - suffix.length));
   const finalPrompt = (cleanPrompt + suffix).slice(0, MAX_PROMPT_LENGTH);
+  const cleanNegativePrompt =
+    typeof negativePrompt === "string" ? negativePrompt.trim().slice(0, MAX_NEGATIVE_PROMPT_LENGTH) : "";
 
   const isEdit = image != null;
 
@@ -229,8 +262,22 @@ export async function POST(request) {
       return jsonError("Couldn't reach the image service. Check your connection and try again.", 500);
     }
   } else {
-    // ---- Text-to-image generation path: flux-1-schnell, JSON body ----
-    const payload = { prompt: finalPrompt, steps: DIFFUSION_STEPS };
+    // ---- Text-to-image generation path: stable-diffusion-xl-base-1.0,
+    // JSON body. This is the fix for the aspect-ratio bug: width/height
+    // are real, honored parameters on this model (unlike flux-1-schnell,
+    // which had nowhere to receive them), so the selected ratio reaches
+    // the provider as actual generation dimensions rather than being
+    // silently dropped and defaulting to a square image. negative_prompt
+    // is likewise sent as its own field instead of being folded into the
+    // prompt text.
+    const dimensions = ASPECT_RATIO_DIMENSIONS[cleanAspectRatio] || ASPECT_RATIO_DIMENSIONS["1:1"];
+    const payload = {
+      prompt: finalPrompt,
+      width: dimensions.width,
+      height: dimensions.height,
+      num_steps: SDXL_NUM_STEPS,
+      ...(cleanNegativePrompt ? { negative_prompt: cleanNegativePrompt } : {}),
+    };
     const CLOUDFLARE_API_URL = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${CLOUDFLARE_GENERATE_MODEL}`;
 
     try {
@@ -285,7 +332,8 @@ export async function POST(request) {
     );
   }
 
-  // Both models' documented output is a base64-encoded JPEG.
+  // Both models used here (SDXL for generation, flux-2-klein-4b for
+  // editing) document their output as a base64-encoded JPEG.
   return new Response(JSON.stringify({ imageDataUrl: `data:image/jpeg;base64,${base64}` }), {
     status: 200,
     headers: { "Content-Type": "application/json; charset=utf-8", ...CORS_HEADERS },
