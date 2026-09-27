@@ -304,26 +304,57 @@ export async function POST(request) {
   clearTimeout(timeoutId);
 
   const modelUsed = isEdit ? CLOUDFLARE_EDIT_MODEL : CLOUDFLARE_GENERATE_MODEL;
+  const contentType = cfRes.headers.get("content-type") || "";
+  const isJsonResponse = contentType.includes("application/json");
 
-  let data = null;
-  try {
-    data = await cfRes.json();
-  } catch {
-    console.error(`Cloudflare returned an unreadable (non-JSON) response. model=${modelUsed} status=${cfRes.status}`);
-    return jsonError("Received an unreadable response from the image service.", 502);
+  // Cloudflare's /ai/run endpoint always reports an error as JSON
+  // (success:false + an errors array), whether the model's success
+  // response is JSON or raw binary — so failures are handled the same
+  // way regardless of which shape the model normally returns.
+  if (!cfRes.ok) {
+    let errorData = null;
+    try {
+      errorData = isJsonResponse ? await cfRes.json() : JSON.parse(await cfRes.text());
+    } catch {
+      errorData = null;
+    }
+    return cloudflareErrorResponse(cfRes, errorData || {}, modelUsed, [apiToken, accountId]);
   }
 
-  // Cloudflare's /ai/run endpoint signals failure either via a non-2xx
-  // HTTP status or via `success: false` in an otherwise 200 response —
-  // check both rather than assuming only one applies.
-  if (!cfRes.ok || data.success === false) {
-    return cloudflareErrorResponse(cfRes, data, modelUsed, [apiToken, accountId]);
-  }
+  let base64;
+  let outputMime = "image/jpeg";
 
-  const base64 = data && data.result && data.result.image;
+  if (isJsonResponse) {
+    // This is the shape flux-2-klein-4b (editing) uses: the image
+    // comes back base64-encoded inside a JSON envelope.
+    let data = null;
+    try {
+      data = await cfRes.json();
+    } catch {
+      console.error(`Cloudflare returned an unreadable (non-JSON) response despite a JSON content-type. model=${modelUsed} status=${cfRes.status}`);
+      return jsonError("Received an unreadable response from the image service.", 502);
+    }
+
+    if (data.success === false) {
+      return cloudflareErrorResponse(cfRes, data, modelUsed, [apiToken, accountId]);
+    }
+
+    base64 = data && data.result && data.result.image;
+  } else {
+    // This is the shape stable-diffusion-xl-base-1.0 (generation)
+    // actually uses: the raw image bytes come back directly as the
+    // response body (Cloudflare's own docs/SDK confirm SDXL returns
+    // binary PNG/JPEG, not a JSON envelope). Calling cfRes.json() on
+    // this — which the old code always did, unconditionally — fails
+    // to parse and is exactly what produced the "unreadable response"
+    // error. Read it as bytes instead and base64-encode it ourselves.
+    const buffer = await cfRes.arrayBuffer();
+    base64 = Buffer.from(buffer).toString("base64");
+    if (contentType.startsWith("image/")) outputMime = contentType.split(";")[0].trim();
+  }
 
   if (!base64 || typeof base64 !== "string") {
-    console.error(`Cloudflare response had no image data. model=${modelUsed} body=${JSON.stringify(data).slice(0, 500)}`);
+    console.error(`Cloudflare response had no image data. model=${modelUsed} contentType=${contentType}`);
     return jsonError(
       isEdit
         ? "The AI didn't return an edited image. Please try rephrasing your instruction."
@@ -332,9 +363,7 @@ export async function POST(request) {
     );
   }
 
-  // Both models used here (SDXL for generation, flux-2-klein-4b for
-  // editing) document their output as a base64-encoded JPEG.
-  return new Response(JSON.stringify({ imageDataUrl: `data:image/jpeg;base64,${base64}` }), {
+  return new Response(JSON.stringify({ imageDataUrl: `data:${outputMime};base64,${base64}` }), {
     status: 200,
     headers: { "Content-Type": "application/json; charset=utf-8", ...CORS_HEADERS },
   });
