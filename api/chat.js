@@ -1,9 +1,14 @@
 // api/chat.js
 // Vercel Function using the Web (Fetch API) handler signature — secure
-// proxy to Google Gemini (primary) with automatic fallback to Groq
-// (backup) if Gemini fails, hits a quota/rate limit, or errors. Keys are
-// read only from process.env.GEMINI_API_KEY / process.env.GROQ_API_KEY
-// and are never sent to, or exposed in, the frontend.
+// proxy to Groq (primary, fast chat provider) with automatic fallback
+// to Google Gemini if Groq fails, hits a quota/rate limit, returns an
+// empty/invalid response, or its current-info/tool path errors out.
+// Gemini is never called once Groq has already returned a valid
+// response — the fallback only fires on an actual Groq failure, and it
+// happens automatically so the user never sees a raw provider error.
+// Keys are read only from process.env.GROQ_API_KEY /
+// process.env.GEMINI_API_KEY and are never sent to, or exposed in, the
+// frontend.
 //
 // Using the Web signature (export async function POST(request) with a
 // standard Response) is intentional: Vercel's classic Node.js
@@ -12,24 +17,16 @@
 // out of the box, so the reply appears token-by-token as it's
 // generated instead of popping in all at once.
 
-// ---- Gemini (PRIMARY) ----
-// gemini-2.5-flash was deprecated/shut down (per Google's own
-// deprecations page) — gemini-3.5-flash is the current GA Flash-tier
-// model as of this writing. Check
-// https://ai.google.dev/gemini-api/docs/models before assuming this
-// stays correct long-term; Google rotates Gemini model IDs often.
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse`;
-
-// ---- Groq (FALLBACK) ----
+// ---- Groq (PRIMARY — fast chat provider) ----
 // IMPORTANT: this used to default to "groq/compound", Groq's agentic
 // tool-use "system". Groq deprecated compound/compound-mini and
 // scheduled them for full shutdown — which is exactly what was causing
 // requests (especially ones that triggered its web-search tool, e.g.
 // questions about current/outside topics) to silently fail or come back
-// empty. Reverted to a plain, currently-supported chat model with no
-// tool-use involved, which is far more reliable as a fallback. Verify
-// current model status at https://console.groq.com/docs/deprecations.
+// empty ("GameMind AI didn't return a response"). Reverted to a plain,
+// currently-supported chat model with no tool-use involved, which is
+// far more reliable as the primary provider. Verify current model
+// status at https://console.groq.com/docs/deprecations.
 const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
 // Vision-capable Groq model, used as the vision fallback if Gemini's
@@ -39,6 +36,15 @@ const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 const GROQ_VISION_MODEL = process.env.GROQ_VISION_MODEL || "qwen/qwen3.8-27b";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+
+// ---- Gemini (FALLBACK — only used if Groq fails) ----
+// gemini-2.5-flash was deprecated/shut down (per Google's own
+// deprecations page) — gemini-3.5-flash is the current GA Flash-tier
+// model as of this writing. Check
+// https://ai.google.dev/gemini-api/docs/models before assuming this
+// stays correct long-term; Google rotates Gemini model IDs often.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse`;
 
 const UPSTREAM_TIMEOUT_MS = 25000;
 const MAX_MESSAGES = 40;
@@ -134,10 +140,9 @@ function toGeminiContents(finalMessages) {
   });
 }
 
-// ---- Attempt Gemini (primary) ----
+// ---- Attempt Gemini (fallback — only called if Groq fails) ----
 // Returns a ready-to-stream Response on success, or null on any failure
-// (after logging the real reason server-side) so the caller can fall
-// back to Groq.
+// (after logging the real reason server-side).
 async function attemptGemini(finalMessages, systemPrompt, usingVision) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -257,10 +262,10 @@ async function attemptGemini(finalMessages, systemPrompt, usingVision) {
   });
 }
 
-// ---- Attempt Groq (fallback) ----
+// ---- Attempt Groq (primary — fast chat provider) ----
 // Returns a ready-to-stream Response on success, or null on failure
-// (after logging the real reason) so the caller can return a final,
-// clear error to the client.
+// (after logging the real reason) so the caller can automatically fall
+// back to Gemini.
 async function attemptGroq(finalMessages, systemPrompt, usingVision) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
@@ -481,14 +486,16 @@ export async function POST(request) {
       ? system.trim().slice(0, 2000)
       : "You are GameMind AI, a friendly, natural-sounding general-purpose AI assistant built by Sarim (Sarim Production), with strong gaming expertise. If asked who made you or for a contact email, say Sarim (Sarim Production) and sarimforbusiness@gmail.com — never invent other names or emails. If the user writes in Hindi or Hinglish, reply in casual everyday spoken Hindi/Hinglish (like texting a friend), never shuddh/literary Hindi. Answer directly and briefly — usually 2 to 6 short paragraphs or a few bullet points, no long articles unless the user asks for detail. No emojis.";
 
-  // ---- PRIMARY: Gemini ----
-  const geminiResponse = await attemptGemini(finalMessages, systemPrompt, usingVision);
-  if (geminiResponse) return geminiResponse;
-
-  // ---- FALLBACK: Groq ----
-  console.error("Falling back to Groq after Gemini failed.");
+  // ---- PRIMARY: Groq (fast) ----
   const groqResponse = await attemptGroq(finalMessages, systemPrompt, usingVision);
   if (groqResponse) return groqResponse;
+
+  // ---- FALLBACK: Gemini (only reached if Groq failed/errored/returned
+  // nothing usable — e.g. a current-events question its search path
+  // couldn't complete) ----
+  console.error("Falling back to Gemini after Groq failed.");
+  const geminiResponse = await attemptGemini(finalMessages, systemPrompt, usingVision);
+  if (geminiResponse) return geminiResponse;
 
   // ---- Both providers failed ----
   console.error("Both Gemini and Groq failed for this request.");
