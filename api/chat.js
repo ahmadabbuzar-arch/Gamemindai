@@ -415,7 +415,7 @@ export async function POST(request) {
     return jsonError("Invalid request body.", 400);
   }
 
-  const { messages, system, image } = body || {};
+  const { messages, system, image, images } = body || {};
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return jsonError("No message provided.", 400);
@@ -440,29 +440,34 @@ export async function POST(request) {
     return jsonError("No valid message content provided.", 400);
   }
 
-  const hasImagePayload = image != null;
+  // ---- Image validation (optional) ----
+  // Accepts either the legacy single `image` or an `images` array
+  // (multi-select upload). Both end up as one list.
+  const MAX_IMAGES_PER_MESSAGE = 5;
+  const rawImages = Array.isArray(images) ? images : image != null ? [image] : [];
+  if (rawImages.length > MAX_IMAGES_PER_MESSAGE) {
+    return jsonError(`Please attach at most ${MAX_IMAGES_PER_MESSAGE} images at a time.`, 400);
+  }
+
+  const hasImagePayload = rawImages.length > 0;
   if (!hasImagePayload && !cleanedMessages[cleanedMessages.length - 1].content.trim()) {
     return jsonError("No message provided.", 400);
   }
 
-  // ---- Image validation (optional) ----
-  let imageDataUrl = null;
-  let usingVision = false;
-
-  if (image != null) {
-    if (typeof image !== "object" || typeof image.mimeType !== "string" || typeof image.data !== "string") {
+  const imageDataUrls = [];
+  for (const img of rawImages) {
+    if (!img || typeof img !== "object" || typeof img.mimeType !== "string" || typeof img.data !== "string") {
       return jsonError("Invalid image data.", 400);
     }
-    if (!ALLOWED_IMAGE_MIME_TYPES.includes(image.mimeType)) {
+    if (!ALLOWED_IMAGE_MIME_TYPES.includes(img.mimeType)) {
       return jsonError("Please attach a PNG, JPEG, or WebP image.", 400);
     }
-    if (!image.data.trim()) {
+    if (!img.data.trim()) {
       return jsonError("Invalid image data.", 400);
     }
-
     let byteLength;
     try {
-      byteLength = Buffer.from(image.data, "base64").length;
+      byteLength = Buffer.from(img.data, "base64").length;
     } catch {
       return jsonError("Invalid image data.", 400);
     }
@@ -472,10 +477,9 @@ export async function POST(request) {
     if (byteLength > MAX_IMAGE_BYTES) {
       return jsonError("That image is too large. Please attach one under 8MB.", 400);
     }
-
-    imageDataUrl = `data:${image.mimeType};base64,${image.data}`;
-    usingVision = true;
+    imageDataUrls.push(`data:${img.mimeType};base64,${img.data}`);
   }
+  const usingVision = imageDataUrls.length > 0;
 
   const lastMessage = cleanedMessages[cleanedMessages.length - 1];
   const finalMessages = usingVision
@@ -484,8 +488,15 @@ export async function POST(request) {
         {
           role: lastMessage.role,
           content: [
-            { type: "text", text: lastMessage.content || "What can you tell me about this image?" },
-            { type: "image_url", image_url: { url: imageDataUrl } },
+            {
+              type: "text",
+              text:
+                lastMessage.content ||
+                (imageDataUrls.length > 1
+                  ? "What can you tell me about these images?"
+                  : "What can you tell me about this image?"),
+            },
+            ...imageDataUrls.map((url) => ({ type: "image_url", image_url: { url } })),
           ],
         },
       ]
